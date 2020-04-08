@@ -1,0 +1,133 @@
+from typing import Dict
+import time
+import logging
+from multiprocessing import Manager, Lock, Process, Event
+from copy import deepcopy
+
+import serial
+import pynmea2
+
+NMEACache = Dict[str, pynmea2.TalkerSentence]
+
+
+class GPSProvider:
+
+    def __init__(self, gps_port: str, message_filter=("GGA", "GSA")):
+        """
+        GPSProvider spawns a child worker process which constantly receives data from the gps.
+        When getter methods are called, the shared memory cache of the worker is interrogated to get the latest
+        messages asynchronously
+
+        :param gps_port: serial port where the gps device is connected
+        :param message_filter: choose which messages are cached (by default only "GGA" and "GSA" types)
+        """
+
+        manager = Manager()  # fun fact, make this self.manager and watch the world burn
+
+        self._gps_cache = manager.dict()
+        self._worker_running = manager.Event()
+        self._gps_cache_lock = Lock()
+
+        self._message_filter = message_filter
+        self._gps_port = gps_port
+
+        for m in self._message_filter:
+            self._gps_cache[m] = None
+
+        self._worker = None
+        self._spawn_worker()
+
+    def _spawn_worker(self) -> None:
+
+        logging.debug("GPS Provider is spawning a new worker process")
+
+        self._worker_running.set()
+        self._worker = Process(
+                          target=self._blueprint,
+                          args=(self._gps_port, self._gps_cache, self._gps_cache_lock, self._worker_running)
+                      )
+        self._worker.start()
+
+    def _blueprint(self, gps_port: str, gps_cache: NMEACache, gps_cache_lock: Lock, is_running: Event) -> None:
+
+        with serial.Serial(gps_port, baudrate=9600, timeout=None) as serial_port:
+
+            # FIXME set the correct port or even search for it based on messages received and status
+            # TODO auto flushed by receiving \r\n on bus, check the gps module sends this
+
+            # TODO add a buffer? sio = io.TextIOWrapper(io.BufferedRWPair(ser, ser)) in example but
+            #  https://stackoverflow.com/questions/24498048/python-io-modules-textiowrapper-or-buffererwpair-functions-are-not-playing-nice
+
+            while is_running.is_set():
+
+                raw_message = serial_port.readline()
+                nmea_msg = pynmea2.parse(raw_message.decode())
+                # TODO also log raw gps output to make sure its ok
+
+                gps_cache_lock.acquire()
+
+                if nmea_msg.sentence_type in gps_cache.keys():
+                    gps_cache[nmea_msg.sentence_type] = nmea_msg
+
+                gps_cache_lock.release()
+
+        logging.debug("GPS Provider worker process has stopped correctly")  # TODO enable logging from worker processes
+
+    def close(self) -> None:
+        """
+        This method terminates the worker process, clears the cache, and frees all other used resources
+        in preparation for a graceful shutdown
+        """
+
+        # stop worker process
+        self._worker_running.clear()
+        self._worker.join()
+
+        # clear cache just to be sure
+        self._gps_cache_lock.acquire()
+
+        for m in self._gps_cache.keys():
+            self._gps_cache[m] = None
+
+        self._gps_cache_lock.release()
+
+        logging.debug("GPS Provider has cleaned up used resources")
+
+    def __enter__(self):
+        """This allows the GPSProvider to be (optionally) used in python 'with' statements"""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """This allows the GPSProvider to be (optionally) used in python 'with' statements"""
+        self.close()
+
+    def get_latest_messages(self) -> NMEACache:
+        """Get the latest messages received for each category"""
+
+        # TODO check worker.is_alive() and check timestamps for the packages are reasonable,
+        #  else clear the cache and attempt to restart the worker?
+
+        self._gps_cache_lock.acquire()
+
+        cache_copy = deepcopy(self._gps_cache)
+
+        self._gps_cache_lock.release()
+
+        return cache_copy
+
+
+if __name__ == '__main__':
+
+    logging.basicConfig(level=logging.DEBUG)
+
+    with GPSProvider('COM4', message_filter=("GGA", "GSA")) as p:
+        for i in range(10):
+            crt_cache = p.get_latest_messages()
+
+            print("\tLatest GGA message: ", repr(crt_cache["GGA"]))
+            print("\tLatest GSA message: ", repr(crt_cache["GSA"]))
+
+            time.sleep(2)
+
+    print("Graceful exit?")
+    print(not p._worker.is_alive())

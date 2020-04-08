@@ -1,0 +1,5 @@
+yaml
+vimba
+opencv-python
+pyserial
+pynmea2
