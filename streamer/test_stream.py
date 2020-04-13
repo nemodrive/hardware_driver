@@ -1,11 +1,11 @@
 import cv2
 
-from combined import SimpleGrabber
+from combined import SimpleStreamer
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
 
-grabber = SimpleGrabber()
+grabber = SimpleStreamer()
 
 for packet in grabber.stream_generator():
 

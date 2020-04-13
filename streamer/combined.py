@@ -9,7 +9,7 @@ import libs.yei3.threespace_api as ts_api
 from gps_provider import GPSProvider
 
 
-class SimpleGrabber:
+class SimpleStreamer:
 
     def __init__(self):
         # load settings from configuration file
@@ -29,18 +29,33 @@ class SimpleGrabber:
         # setup IMU
         self.imu_device = self.get_imu_device()
 
+        # TODO is it necessary to set device streaming timer?
+
         if self.imu_device is None:
             logging.warning("IMU Sensor not found")
         else:
+            # TODO POSE: Point position + Quaternion orientation
+            # TODO TWIST: Vector3 linear + Vector3 angular velocities
+            # TODO IMU MESSAGE: Quaternion orientation + Vector3 angular_velocity + Vector3 linear_acceleration
+
+            # From manual: Corrected Sensor Data:
+            # This refers to 'raw' data that has been biased and scaled to represent real-world units
+            # For the accelerometer, these values are in units of g-forces,
+            # for the magnetometer, these values are in units of gauss,
+            # and for the gyroscope, these values are in units of radians/sec
+
             self.imu_device.setStreamingSlots(
                 slot0='getTaredOrientationAsQuaternion',
-                slot1='getCorrectedGyroRate', # getNormalizedGyroRate
-                slot2='getCorrectedLinearAccelerationInGlobalSpace'
+                # From manual: "Note that this result is the same data returned by the normalized gyro rate command."
+                slot1='getCorrectedGyroRate',  # in radians / sec
+                slot2='getCorrectedLinearAccelerationInGlobalSpace'  # in G's
             )
+
+            # TODO try a streaming session with a worker process similar to gps and compare performance
 
         # TODO imu_device.close() when finished
 
-        self.gps_provider = GPSProvider('COM4')  # TODO port
+        self.gps_provider = GPSProvider(self.settings["gps_port"])  # TODO port
 
         # TODO gps_provider.close() when finished
 
