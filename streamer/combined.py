@@ -34,8 +34,8 @@ class SimpleGrabber:
         else:
             self.imu_device.setStreamingSlots(
                 slot0='getTaredOrientationAsQuaternion',
-                slot1='getAllRawComponentSensorData',
-                slot2='getButtonState'
+                slot1='getCorrectedGyroRate', # getNormalizedGyroRate
+                slot2='getCorrectedLinearAccelerationInGlobalSpace'
             )
 
         # TODO imu_device.close() when finished
