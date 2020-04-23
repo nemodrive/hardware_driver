@@ -1,0 +1,9 @@
+---
+ignore:
+  - "build"
+  - "devel"
+  - "test"
+  - "src/node_example/test"
+
+fixes:
+  - "src/node_example/::"
