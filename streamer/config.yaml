@@ -4,3 +4,7 @@ camera_serial_numbers:
   right: YOUR_SERIAL_NO_HERE
 
 gps_port: COM4
+
+car_data_server:
+  host: 127.0.0.1
+  port: 6366
