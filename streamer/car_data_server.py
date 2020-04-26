@@ -10,6 +10,8 @@ import signal  # ensure graceful exit
 
 # from combined import SimpleStreamer
 
+HEADER_SIZE = 10
+
 server_running = True
 
 
@@ -66,10 +68,17 @@ def main():
         data_from_generator = {
             "car_speed": 100,
             "string_description": "A very fast car",
-            "a very random number": random.randint(0, 150)
+            "a very random number": random.randint(0, 150),
+            "a very random string": 'A' * random.randint(2048, 4096)
         }
 
         message = pickle.dumps(data_from_generator)
+
+        header = bytes(("%-" + str(HEADER_SIZE) + "d") % len(message), 'utf-8')
+
+        # print(header)
+
+        message = header + message
 
         disconnected_clients = []
 

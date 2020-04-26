@@ -6,5 +6,6 @@ camera_serial_numbers:
 gps_port: COM4
 
 car_data_server:
-  host: 127.0.0.1
+  host: 0.0.0.0
   port: 6366
+  header_size: 10
