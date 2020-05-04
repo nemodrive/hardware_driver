@@ -27,7 +27,7 @@ signal.signal(signal.SIGINT, _handle_signal)
 def accept_clients_thread(clients: List, running: Event()):
 
     with open("config.yaml", "r") as f:
-        settings = yaml.load(f, Loader=yaml.FullLoader)
+        settings = yaml.load(f, Loader=yaml.SafeLoader)
 
     main_socket = socket.socket()
 

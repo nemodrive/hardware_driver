@@ -1,3 +1,8 @@
+enabled_features:
+  video: False
+  gps: True
+  imu: True
+
 camera_serial_numbers:
   center: YOUR_SERIAL_NO_HERE
   left: YOUR_SERIAL_NO_HERE
@@ -9,3 +14,4 @@ car_data_server:
   host: 0.0.0.0
   port: 6366
   header_size: 10
+

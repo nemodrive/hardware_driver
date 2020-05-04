@@ -14,7 +14,7 @@ class SimpleStreamer:
     def __init__(self):
         # load settings from configuration file
         with open("config.yaml", "r") as f:
-            self.settings = yaml.load(f)
+            self.settings = yaml.load(f, Loader=yaml.SafeLoader)
 
         # assign cameras to their positions and check everything is working
         self.cameras = self._get_cameras()
