@@ -24,8 +24,8 @@ def publisher():
         settings = yaml.load(f, Loader=yaml.SafeLoader)
 
     string_publisher = rospy.    Publisher('nemo_streamer', String, queue_size=settings["queue_size"])
-    imu_publisher = rospy.Publisher('nemo_streamer', Imu, queue_size=settings["queue_size"])
-    nmea_publisher = rospy.Publisher('nmea_sentence ', Sentence, queue_size=settings["queue_size"]) # TODO make sure nobody is publishing to this same topic
+    imu_publisher = rospy.Publisher('nemo_imu', Imu, queue_size=settings["queue_size"])
+    nmea_publisher = rospy.Publisher('nmea_sentence', Sentence, queue_size=settings["queue_size"]) # TODO make sure nobody is publishing to this same topic
 
     client_socket = socket.socket()
 
@@ -71,13 +71,25 @@ def publisher():
 
             # send IMU message http://docs.ros.org/api/sensor_msgs/html/msg/Imu.html
 
+            imu_packet = packet["sensor_data"]["imu"]
+
             imu_msg = Imu(
                 header=nemo_header,
-                orientation=Quaternion(x=0.0, y=0.0, z=0.0, w=1.0),
+                orientation=Quaternion(
+                    x=imu_packet["orientation_quaternion"]["x"],
+                    y=imu_packet["orientation_quaternion"]["y"],
+                    z=imu_packet["orientation_quaternion"]["z"],
+                    w=imu_packet["orientation_quaternion"]["w"]),
                 orientation_covariance=settings["imu"]["orientation_covariance"],
-                angular_velocity=Vector3(x=0.1, y=0.2, z=0.0),
+                angular_velocity=Vector3(
+                    x=imu_packet["gyro_rate"]["x"],
+                    y=imu_packet["gyro_rate"]["y"],
+                    z=imu_packet["gyro_rate"]["z"]),
                 angular_velocity_covariance=settings["imu"]["angular_velocity_covariance"],
-                linear_acceleration=Vector3(x=0.0, y=0.1, z=0.0),
+                linear_acceleration=Vector3(
+                    x=imu_packet["linear_acceleration"]["x"] / 9.80665,  # g's to m/s^2
+                    y=imu_packet["linear_acceleration"]["y"] / 9.80665,  # g's to m/s^2
+                    z=imu_packet["linear_acceleration"]["z"]) / 9.80665,  # g's to m/s^2
                 linear_acceleration_covariance=settings["imu"]["linear_acceleration_covariance"],
             )
 
@@ -86,13 +98,17 @@ def publisher():
 
             # send GPS data to nmea_topic_driver of nmea_navsat_driver package
 
-            nmea_msg = Sentence(
-                header=nemo_header, # TODO The header.stamp should correspond to the time that the message was read from the device for accurate time_reference output
-                sentence="$GPGGA,170905.935,3854.928,N,07702.497,W,0,00,,,M,,M,,*55",
-            )
+            for msg_type, msg_str in packet["sensor_data"]["gps"].items():
 
-            nmea_publisher.publish(nmea_msg)
-            rospy.loginfo(str(nmea_msg))
+                # TODO caching might flood the ROS nmea_driver package, inspect this
+
+                nmea_msg = Sentence(
+                    header=nemo_header, # TODO The header.stamp should correspond to the time that the message was read from the device for accurate time_reference output
+                    sentence=msg_str,
+                )
+
+                nmea_publisher.publish(nmea_msg)
+                # rospy.loginfo(str(nmea_msg))
 
         except Exception as e:
             rospy.loginfo(type(e))

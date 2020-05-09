@@ -20,7 +20,11 @@ import subprocess
 import collections
 import serial
 import multiprocessing
-import multiprocessing.forking
+# import multiprocessing.forking
+if sys.platform.startswith('win'):
+    import multiprocessing.popen_spawn_win32 as forking
+else:
+    import multiprocessing.popen_fork as forking
 import time
 
 ### Globals ###

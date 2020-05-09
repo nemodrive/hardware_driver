@@ -8,10 +8,9 @@ camera_serial_numbers:
   left: YOUR_SERIAL_NO_HERE
   right: YOUR_SERIAL_NO_HERE
 
-gps_port: COM4
+gps_port: COM7
 
 car_data_server:
   host: 0.0.0.0
   port: 6366
   header_size: 10
-

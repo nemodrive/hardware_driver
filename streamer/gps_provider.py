@@ -12,14 +12,13 @@ NMEACache = Dict[str, pynmea2.TalkerSentence]
 
 class GPSProvider:
 
-    def __init__(self, gps_port: str, message_filter=("GGA", "GSA")):
+    def __init__(self, gps_port: str):
         """
         GPSProvider spawns a child worker process which constantly receives data from the gps.
         When getter methods are called, the shared memory cache of the worker is interrogated to get the latest
         messages asynchronously
 
         :param gps_port: serial port where the gps device is connected
-        :param message_filter: choose which messages are cached (by default only "GGA" and "GSA" types)
         """
 
         manager = Manager()  # fun fact, make this self.manager and watch the world burn
@@ -28,11 +27,7 @@ class GPSProvider:
         self._worker_running = manager.Event()
         self._gps_cache_lock = Lock()
 
-        self._message_filter = message_filter
         self._gps_port = gps_port
-
-        for m in self._message_filter:
-            self._gps_cache[m] = None
 
         self._worker = None
         self._spawn_worker()
@@ -61,13 +56,19 @@ class GPSProvider:
             while is_running.is_set():
 
                 raw_message = serial_port.readline()
-                nmea_msg = pynmea2.parse(raw_message.decode())
+
+                try:
+                    nmea_msg = pynmea2.parse(raw_message.decode())
+                except pynmea2.nmea.ParseError as e:
+                    # package is compromised, maybe checksum verification failed, we'll skip this one
+                    print("GPS received malformed NMEA message!!!!")  # TODO add to main logger
+                    continue
+
                 # TODO also log raw gps output to make sure its ok
 
                 gps_cache_lock.acquire()
 
-                if nmea_msg.sentence_type in gps_cache.keys():
-                    gps_cache[nmea_msg.sentence_type] = nmea_msg
+                gps_cache[nmea_msg.sentence_type] = nmea_msg
 
                 gps_cache_lock.release()
 
@@ -120,12 +121,14 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.DEBUG)
 
-    with GPSProvider('COM4', message_filter=("GGA", "GSA")) as p:
+    with GPSProvider('COM7') as p:
         for i in range(10):
             crt_cache = p.get_latest_messages()
 
-            print("\tLatest GGA message: ", repr(crt_cache["GGA"]))
-            print("\tLatest GSA message: ", repr(crt_cache["GSA"]))
+            # print("\tLatest GGA message: ", repr(crt_cache["GGA"]))
+            # print("\tLatest GSA message: ", repr(crt_cache["GSA"]))
+
+            print(crt_cache)
 
             time.sleep(2)
 

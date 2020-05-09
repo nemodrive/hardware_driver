@@ -6,9 +6,10 @@ import pickle
 from multiprocessing import Process, Manager, Value, Event
 from typing import List, Dict
 import random
+from datetime import datetime
 import signal  # ensure graceful exit
 
-# from combined import SimpleStreamer
+from combined import SimpleStreamer
 
 HEADER_SIZE = 10
 
@@ -50,6 +51,28 @@ def accept_clients_thread(clients: List, running: Event()):
     main_socket.close()
 
 
+# def generate_mock_data_packet():
+#     yield {
+#
+#         "images": {
+#             "left": "A" * 1024,
+#             "center": "A" * 1024,
+#             "right": "A" * 1024,
+#         },
+#         "sensor_data": {
+#             "gps":
+#                 {
+#                     "GGA": "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47",
+#                     "GSA": "$GPGSA,A,3,04,05,,09,12,,,24,,,,,2.5,1.3,2.1*39",
+#                 },
+#             "imu": {
+#
+#             }
+#         },
+#         "datetime": datetime.now(),
+#     }
+
+
 def main():
 
     manager = Manager()
@@ -61,20 +84,15 @@ def main():
     accept_clients_worker = Process(target=accept_clients_thread, args=(clients, worker_running))
     accept_clients_worker.start()
 
+    grabber = SimpleStreamer()
+
     while server_running:
 
-        # time.sleep(0.1)
-
-        data_from_generator = {
-            "car_speed": 100,
-            "string_description": "A very fast car",
-            "a very random number": random.randint(0, 150),
-            "a very random string": 'A' * random.randint(2048, 4096)
-        }
+        data_packet = next(grabber.stream_generator())
 
         # TODO don't send images if client does not request them
 
-        message = pickle.dumps(data_from_generator, protocol=2)  # TODO ROS only supports python2
+        message = pickle.dumps(data_packet, protocol=2)  # TODO ROS only supports python2
 
         header = bytes(("%-" + str(HEADER_SIZE) + "d") % len(message), 'utf-8')
 

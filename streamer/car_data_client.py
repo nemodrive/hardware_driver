@@ -2,6 +2,7 @@ import socket
 import pickle
 import logging
 import signal
+import time
 
 client_running = True
 
