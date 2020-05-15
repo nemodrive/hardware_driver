@@ -32,6 +32,8 @@ while client_running:
 
     try:
 
+        _begin_time = time.time()
+
         message = client_socket.recv(BUFFER_SIZE)  # TODO adjust buffer
 
         header = message[:HEADER_SIZE]
@@ -52,7 +54,10 @@ while client_running:
             message += last
 
         packet = pickle.loads(message)
-        print(packet)
+
+        print("FPS: ", 1 / (time.time() - _begin_time))
+
+        # print(packet)
 
     except ConnectionResetError:
         print("Server closed connection")

@@ -4,6 +4,7 @@ import pickle
 import yaml
 import rospy
 import os
+import time
 
 from std_msgs.msg import String, Header
 from geometry_msgs.msg import Quaternion, Vector3
@@ -37,6 +38,8 @@ def publisher():
     while not rospy.is_shutdown():
 
         try:
+            _begin_time = time.time()
+
             message = client_socket.recv(BUFFER_SIZE)  # TODO adjust buffer
 
             header = message[:HEADER_SIZE]
@@ -87,9 +90,9 @@ def publisher():
                     z=imu_packet["gyro_rate"]["z"]),
                 angular_velocity_covariance=settings["imu"]["angular_velocity_covariance"],
                 linear_acceleration=Vector3(
-                    x=imu_packet["linear_acceleration"]["x"] / 9.80665,  # g's to m/s^2
-                    y=imu_packet["linear_acceleration"]["y"] / 9.80665,  # g's to m/s^2
-                    z=imu_packet["linear_acceleration"]["z"]) / 9.80665,  # g's to m/s^2
+                    x=(imu_packet["linear_acceleration"]["x"] / 9.80665),  # g's to m/s^2
+                    y=(imu_packet["linear_acceleration"]["y"] / 9.80665),  # g's to m/s^2
+                    z=(imu_packet["linear_acceleration"]["z"]) / 9.80665),  # g's to m/s^2
                 linear_acceleration_covariance=settings["imu"]["linear_acceleration_covariance"],
             )
 
@@ -109,6 +112,10 @@ def publisher():
 
                 nmea_publisher.publish(nmea_msg)
                 # rospy.loginfo(str(nmea_msg))
+
+            _end_time = time.time()
+
+            rospy.loginfo("FPS: " + str(1/(_end_time - _begin_time)))
 
         except Exception as e:
             rospy.loginfo(type(e))
