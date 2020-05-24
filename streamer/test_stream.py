@@ -1,13 +1,19 @@
 import cv2
+from vimba import *
 
 from combined import SimpleStreamer
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
 
-grabber = SimpleStreamer()
+if __name__ == '__main__':
 
-for packet in grabber.stream_generator():
+    grabber = SimpleStreamer()
 
-    for pos, image in packet["images"].items():
-        cv2.imshow(pos, image)
+    for packet in grabber.stream_generator():
+
+        print(packet)
+
+        for pos, image in packet["images"].items():
+            cv2.imshow(pos, image)
+            cv2.waitKey(1)
