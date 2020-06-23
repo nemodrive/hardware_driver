@@ -29,7 +29,8 @@ for f in input_files:
 
         img = cv2.drawChessboardCorners(img, GRID_SIZE, corners2, ret)
         cv2.imshow('img', img)
-        cv2.waitKey(20)
+        cv2.imwrite("checkerboard_corners.jpg", img)
+        cv2.waitKey(0)
     else:
         print("No corners found!")
 
@@ -39,3 +40,19 @@ calib_data = {'mtx': mtx, 'dist': dist, 'rvecs': rvecs, 'tvecs': tvecs, 'objpoin
 
 with open("calib_coefs_cam.pkl", "wb") as f:
     pickle.dump(calib_data, f)
+
+for f in input_files:
+    image = cv2.imread(f)
+
+    h, w = image.shape[:2]
+    newcameramtx, roi = cv2.getOptimalNewCameraMatrix(calib_data['mtx'], calib_data['dist'], (w, h), 1, (w, h))
+
+    corrected = image.copy()
+
+    # undistort
+    cv2.undistort(image, calib_data['mtx'], calib_data['dist'], corrected, newcameramtx)
+    # crop the image
+    x, y, w, h = roi
+    corrected = corrected[y:y + h, x:x + w]
+
+    cv2.imwrite("calibrated_sample.jpg", corrected)
