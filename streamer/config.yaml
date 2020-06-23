@@ -1,6 +1,23 @@
+enabled_features:
+  video: True
+  video_undistort: True
+  gps: True
+  imu: True
+
 camera_serial_numbers:
-  center: YOUR_SERIAL_NO_HERE
+  center: 50-0536957144
   left: YOUR_SERIAL_NO_HERE
   right: YOUR_SERIAL_NO_HERE
 
-gps_port: COM4
+camera_auto_features:
+  auto_adjust_packet_size: True
+  auto_exposure: False
+  auto_white_balance: False
+  auto_iso: False
+
+gps_port: COM7
+
+car_data_server:
+  host: 0.0.0.0
+  port: 6366
+  header_size: 10
