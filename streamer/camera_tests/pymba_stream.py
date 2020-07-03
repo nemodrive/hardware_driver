@@ -46,7 +46,7 @@ if __name__ == '__main__':
         camera.start_frame_acquisition()
 
         # stream images for a while...
-        sleep(5)
+        sleep(10)
 
         # stop frame acquisition
         # start_frame_acquisition can simply be called again if the camera is still armed

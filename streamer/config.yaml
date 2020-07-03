@@ -1,13 +1,13 @@
 enabled_features:
   video: True
-  video_undistort: True
-  gps: True
-  imu: True
+  video_undistort: False
+  gps: False
+  imu: False
 
 camera_serial_numbers:
   center: 50-0536957144
-  left: YOUR_SERIAL_NO_HERE
-  right: YOUR_SERIAL_NO_HERE
+  left: 50-0536955287
+  right: 50-0536957147
 
 camera_auto_features:
   auto_adjust_packet_size: True

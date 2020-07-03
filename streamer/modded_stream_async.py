@@ -1,19 +1,66 @@
-import yaml
-import numpy as np
+import threading
+import sys
 import cv2
-import pickle
-import logging
 import time
-from datetime import datetime
+import yaml
+import logging
+from typing import Optional
 from typing import Dict
-
-import libs.yei3.threespace_api as ts_api
-from gps_provider import GPSProvider
-
 from vimba import *
 
 
-logging.basicConfig(level="DEBUG")
+def abort(reason: str, return_code: int = 1, usage: bool = False):
+    print(reason + '\n')
+    sys.exit(return_code)
+
+
+# def get_camera(camera_id: Optional[str]) -> Camera:
+#     with Vimba.get_instance() as vimba:
+#         if camera_id:
+#             try:
+#                 return vimba.get_camera_by_id(camera_id)
+#
+#             except VimbaCameraError:
+#                 abort('Failed to access Camera \'{}\'. Abort.'.format(camera_id))
+#
+#         else:
+#             cams = vimba.get_all_cameras()
+#             if not cams:
+#                 abort('No Cameras accessible. Abort.')
+#
+#             return cams[0]
+#
+#
+def setup_camera(cam: Camera):
+    with cam:
+        # Enable auto exposure time setting if camera supports it
+        try:
+            cam.ExposureAuto.set('Continuous')
+
+        except (AttributeError, VimbaFeatureError):
+            pass
+
+        # Enable white balancing if camera supports it
+        try:
+            cam.BalanceWhiteAuto.set('Continuous')
+
+        except (AttributeError, VimbaFeatureError):
+            pass
+
+        # Try to adjust GeV packet size. This Feature is only available for GigE - Cameras.
+        try:
+            cam.GVSPAdjustPacketSize.run()
+
+            while not cam.GVSPAdjustPacketSize.is_done():
+                pass
+
+        except (AttributeError, VimbaFeatureError):
+            pass
+
+        # Query available, open_cv compatible pixel formats
+        # prefer color formats over monochrome formats
+
+    cam.set_pixel_format(intersect_pixel_formats(cam.get_pixel_formats(), COLOR_PIXEL_FORMATS)[0])
 
 
 class MulticamStreamer:
@@ -27,12 +74,16 @@ class MulticamStreamer:
             # assign cameras to their positions and check everything is working
             self.cameras = self._get_cameras()
 
-            self.frame_generators = {}
+            self.handlers = {}
 
             # setup the cameras by sending vimba commands
             for pos, cam in self.cameras.items():
                 self._setup_camera(cam)
-                self.frame_generators[pos] = self._camera_frame_generator_wrapper(cam)
+                self.handlers[pos] = Handler()
+
+        #     with Vimba.get_instance():
+            #         with cam:
+            #             cam.start_streaming(handler=self.handlers[pos], buffer_count=10) # TODO adjust buffer
 
     def _get_cameras(self) -> Dict[str, Camera]:
         """Filters connected cameras for the desired serial numbers and assigns them to
@@ -64,9 +115,6 @@ class MulticamStreamer:
         """Set camera parameters before starting frame capture"""
         with Vimba.get_instance():
             with camera:
-
-                # camera.StreamBytesPerSecond.set(38000000)
-
                 if self.settings["camera_auto_features"]["auto_adjust_packet_size"]:
                     #camera.GVSPPacketSize.set(1500)
                     try:
@@ -100,65 +148,67 @@ class MulticamStreamer:
                 except (AttributeError, VimbaFeatureError):
                     logging.warning("Failed to set pixel format for camera %s", camera.get_id())
 
-    def _camera_frame_generator_wrapper(self, cam: Camera) -> np.ndarray:
-
-        with Vimba.get_instance():
-            with cam:
-
-                if self.settings["enabled_features"]["video_undistort"]:
-                    # load calibration data for this camera
-                    with open("camera/calib_coefs_%s.pkl" % cam.get_serial(), "rb") as f:
-                        calib_data = pickle.load(f)
-
-                # NOTE timeout does not influence FPS, driver will wait max timeout_ms for the next frame, else it will stop
-                default_generator = cam.get_frame_generator(limit=None, timeout_ms=500000)
-
-                for frame in default_generator:
-                    try:
-                        ndarray_frame = frame.as_numpy_ndarray()
-                    except:
-                        # TODO this is to avoid the weird random error "parameter -7 invalid" which happens rarely
-                        continue
-
-                    image = cv2.cvtColor(ndarray_frame, cv2.COLOR_BAYER_RG2RGB)
-
-                    # TODO resize frame here, or later in the app? Advantage is to undistort a smaller frame for better speed?
-
-                    if self.settings["enabled_features"]["video_undistort"]:
-                        h, w = image.shape[:2]
-                        cameramtx, roi = cv2.getOptimalNewCameraMatrix(
-                            calib_data['mtx'],
-                            calib_data['dist'],
-                            (w, h),
-                            1,
-                            (w, h)
-                        )
-                        corrected = cv2.undistort(image, calib_data['mtx'], calib_data['dist'], None, cameramtx)  # FIXME
-                        x, y, w, h = roi
-                        corrected = corrected[y:y + h, x:x + w]
-                        yield corrected
-                    else:
-                        yield image
 
 
-if __name__ == '__main__':
+class Handler:
+    def __init__(self):
+        self.shutdown_event = threading.Event()
+        self.last_time = time.time()
+
+    def __call__(self, cam: Camera, frame: Frame):
+        ENTER_KEY_CODE = 13
+
+        key = cv2.waitKey(1)
+        if key == ENTER_KEY_CODE:
+            self.shutdown_event.set()
+            return
+
+        elif frame.get_status() == FrameStatus.Complete:  # TODO this FrameStatus.Complete might be important
+            print('{} acquired {}'.format(cam, frame), flush=True)
+
+            msg = 'Stream from \'{}\'. Press <Enter> to stop stream.'
+            # cv2.imshow(msg.format(cam.get_name()), frame.as_opencv_image())
+
+            ndarray_frame = frame.as_numpy_ndarray()
+
+            color_frame = cv2.cvtColor(ndarray_frame, cv2.COLOR_BAYER_RG2RGB)
+
+            fps = 1 / (time.time() - self.last_time)
+
+            cv2.putText(color_frame, f"FPS: {fps:.1f}", (0, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2,
+                        cv2.LINE_AA)
+
+            cv2.imshow(msg.format(cam.get_name()), color_frame)
+
+            print("FPS: ", fps)
+            self.last_time = time.time()
+
+        cam.queue_frame(frame)
+
+
+def main():
 
     ms = MulticamStreamer()
 
+
     with Vimba.get_instance():
-        
-        per_camera_frametimes = {pos: time.time() for pos in ms.frame_generators.keys()}
+        with ms.cameras["center"] as cam:
 
-        while True:
-            for pos, gen in ms.frame_generators.items():
-                frame = next(gen)
-                fps = 1/(time.time() - per_camera_frametimes[pos])
+            # Start Streaming, wait for five seconds, stop streaming
+            #ms._setup_camera(cam)  #setup_camera(cam)
+            handler = ms.handlers["center"] #Handler()
 
-                per_camera_frametimes[pos] = time.time()
+            try:
+                # Start Streaming with a custom a buffer of 10 Frames (defaults to 5)
+                cam.start_streaming(handler=handler, buffer_count=25)
 
-                frame_small = cv2.resize(frame, (int(frame.shape[1] / 2), int(frame.shape[0] / 2)))
-                
-                cv2.putText(frame_small, f"FPS: {fps:.1f}", (0, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
+                # while True:
+                #     print(handler.last_time)
+                #
+                # handler.shutdown_event.wait()
+            finally:
+                cam.stop_streaming()
 
-                cv2.imshow(pos, frame_small)
-                cv2.waitKey(1)
+
+if __name__ == '__main__':
+    main()

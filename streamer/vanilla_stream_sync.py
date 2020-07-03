@@ -31,20 +31,22 @@ THE IDENTIFICATION OF DEFECT SOFTWARE, HARDWARE AND DOCUMENTATION.
 """
 
 import sys
+import cv2
+import time
 from typing import Optional
 from vimba import *
 
 
 def print_preamble():
-    print('////////////////////////////////////////////')
-    print('/// Vimba API Load Save Settings Example ///')
-    print('////////////////////////////////////////////\n')
+    print('//////////////////////////////////////////')
+    print('/// Vimba API Synchronous Grab Example ///')
+    print('//////////////////////////////////////////\n')
 
 
 def print_usage():
     print('Usage:')
-    print('    python load_save_settings.py [camera_id]')
-    print('    python load_save_settings.py [/h] [-h]')
+    print('    python synchronous_grab.py [camera_id]')
+    print('    python synchronous_grab.py [/h] [-h]')
     print()
     print('Parameters:')
     print('    camera_id   ID of the camera to use (using first camera if not specified)')
@@ -92,38 +94,39 @@ def get_camera(camera_id: Optional[str]) -> Camera:
             return cams[0]
 
 
+def setup_camera(cam: Camera):
+    with cam:
+        # Try to adjust GeV packet size. This Feature is only available for GigE - Cameras.
+        try:
+            cam.GVSPAdjustPacketSize.run()
+
+            while not cam.GVSPAdjustPacketSize.is_done():
+                pass
+
+        except (AttributeError, VimbaFeatureError):
+            pass
+
+
 def main():
     print_preamble()
     cam_id = parse_args()
 
     with Vimba.get_instance():
-        print("--> Vimba has been started")
-
         with get_camera(cam_id) as cam:
-            print("--> Camera has been opened (%s)" % cam.get_id())
+            setup_camera(cam)
 
-            # Save camera settings to file.
-            settings_file = '{}_settings.xml'.format(cam.get_id())
-            cam.save_settings(settings_file, PersistType.All)
-            print ("--> Feature values have been saved to '%s'" % settings_file)
+            last_time = time.time()
 
-            # Restore settings to initial value.
-            try:
-                cam.UserSetSelector.set('Default')
+            # Acquire 10 frame with a custom timeout (default is 2000ms) per frame acquisition.
+            for frame in cam.get_frame_generator(limit=None, timeout_ms=3000):
+                #ndarray_frame = frame.as_numpy_ndarray()
+                #cv2.imshow("cam", cv2.cvtColor(ndarray_frame, cv2.COLOR_BAYER_RG2RGB))
+                #cv2.waitKey(10)
+                
+                print('Got {}'.format(frame), flush=True)
 
-            except (AttributeError, VimbaFeatureError):
-                abort('Failed to set Feature \'UserSetSelector\'')
-
-            try:
-                cam.UserSetLoad.run()
-                print("--> All feature values have been restored to default")
-
-            except (AttributeError, VimbaFeatureError):
-                abort('Failed to run Feature \'UserSetLoad\'')
-
-            # Load camera settings from file.
-            cam.load_settings(settings_file, PersistType.All)
-            print("--> Feature values have been loaded from given file '%s'" % settings_file)
+                print("FPS: ", 1/(time.time() - last_time))
+                last_time = time.time()
 
 
 if __name__ == '__main__':

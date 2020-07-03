@@ -1,6 +1,7 @@
 import yaml
 import numpy as np
 import cv2
+import threading
 import pickle
 import logging
 import time
@@ -16,6 +17,47 @@ from vimba import *
 logging.basicConfig(level="DEBUG")
 
 
+class Handler:
+    def __init__(self, pos):
+        # print("init!")
+        self.shutdown_event = threading.Event()
+        self.last_time = time.time()
+        self.pos = pos
+
+    def __call__(self, cam: Camera, frame: Frame):
+
+        # print("call!")
+
+        ENTER_KEY_CODE = 13
+
+        key = cv2.waitKey(1)
+        if key == ENTER_KEY_CODE:
+            self.shutdown_event.set()
+            return
+
+        elif frame.get_status() == FrameStatus.Complete:  # TODO this FrameStatus.Complete might be important
+            print('{} acquired {}'.format(cam, frame), flush=True)
+
+            msg = 'Stream from \'{}\'. Press <Enter> to stop stream.'
+            # cv2.imshow(msg.format(cam.get_name()), frame.as_opencv_image())
+
+            ndarray_frame = frame.as_numpy_ndarray()
+
+            color_frame = cv2.cvtColor(ndarray_frame, cv2.COLOR_BAYER_RG2RGB)
+
+            fps = 1 / (time.time() - self.last_time)
+
+            cv2.putText(color_frame, f"FPS: {fps:.1f}", (0, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2,
+                        cv2.LINE_AA)
+
+            cv2.imshow(self.pos, color_frame)
+
+            print("FPS: ", fps)
+            self.last_time = time.time()
+
+        cam.queue_frame(frame)
+
+
 class MulticamStreamer:
 
     def __init__(self):
@@ -27,12 +69,14 @@ class MulticamStreamer:
             # assign cameras to their positions and check everything is working
             self.cameras = self._get_cameras()
 
-            self.frame_generators = {}
+            self.handlers = {}
 
             # setup the cameras by sending vimba commands
             for pos, cam in self.cameras.items():
                 self._setup_camera(cam)
-                self.frame_generators[pos] = self._camera_frame_generator_wrapper(cam)
+                self.handlers[pos] = Handler(pos)
+
+                # WARNING cant start streaming here because we need to keep the Vimba session alive using a with statement
 
     def _get_cameras(self) -> Dict[str, Camera]:
         """Filters connected cameras for the desired serial numbers and assigns them to
@@ -64,10 +108,8 @@ class MulticamStreamer:
         """Set camera parameters before starting frame capture"""
         with Vimba.get_instance():
             with camera:
-
-                # camera.StreamBytesPerSecond.set(38000000)
-
                 if self.settings["camera_auto_features"]["auto_adjust_packet_size"]:
+                    camera.StreamBytesPerSecond.set(38000000)
                     #camera.GVSPPacketSize.set(1500)
                     try:
                         camera.GVSPAdjustPacketSize.run()
@@ -100,65 +142,27 @@ class MulticamStreamer:
                 except (AttributeError, VimbaFeatureError):
                     logging.warning("Failed to set pixel format for camera %s", camera.get_id())
 
-    def _camera_frame_generator_wrapper(self, cam: Camera) -> np.ndarray:
-
-        with Vimba.get_instance():
-            with cam:
-
-                if self.settings["enabled_features"]["video_undistort"]:
-                    # load calibration data for this camera
-                    with open("camera/calib_coefs_%s.pkl" % cam.get_serial(), "rb") as f:
-                        calib_data = pickle.load(f)
-
-                # NOTE timeout does not influence FPS, driver will wait max timeout_ms for the next frame, else it will stop
-                default_generator = cam.get_frame_generator(limit=None, timeout_ms=500000)
-
-                for frame in default_generator:
-                    try:
-                        ndarray_frame = frame.as_numpy_ndarray()
-                    except:
-                        # TODO this is to avoid the weird random error "parameter -7 invalid" which happens rarely
-                        continue
-
-                    image = cv2.cvtColor(ndarray_frame, cv2.COLOR_BAYER_RG2RGB)
-
-                    # TODO resize frame here, or later in the app? Advantage is to undistort a smaller frame for better speed?
-
-                    if self.settings["enabled_features"]["video_undistort"]:
-                        h, w = image.shape[:2]
-                        cameramtx, roi = cv2.getOptimalNewCameraMatrix(
-                            calib_data['mtx'],
-                            calib_data['dist'],
-                            (w, h),
-                            1,
-                            (w, h)
-                        )
-                        corrected = cv2.undistort(image, calib_data['mtx'], calib_data['dist'], None, cameramtx)  # FIXME
-                        x, y, w, h = roi
-                        corrected = corrected[y:y + h, x:x + w]
-                        yield corrected
-                    else:
-                        yield image
-
 
 if __name__ == '__main__':
 
     ms = MulticamStreamer()
 
     with Vimba.get_instance():
-        
-        per_camera_frametimes = {pos: time.time() for pos in ms.frame_generators.keys()}
+        with ms.cameras["center"] as ccam, ms.cameras["left"] as lcam, ms.cameras["right"] as rcam:
 
-        while True:
-            for pos, gen in ms.frame_generators.items():
-                frame = next(gen)
-                fps = 1/(time.time() - per_camera_frametimes[pos])
+            try:
+                ccam.start_streaming(handler=ms.handlers["center"], buffer_count=1)
+                rcam.start_streaming(handler=ms.handlers["right"], buffer_count=1)
+                lcam.start_streaming(handler=ms.handlers["left"], buffer_count=1)
 
-                per_camera_frametimes[pos] = time.time()
+                # TODO get frames here via lock?
 
-                frame_small = cv2.resize(frame, (int(frame.shape[1] / 2), int(frame.shape[0] / 2)))
-                
-                cv2.putText(frame_small, f"FPS: {fps:.1f}", (0, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
+                while True:
+                    pass
 
-                cv2.imshow(pos, frame_small)
-                cv2.waitKey(1)
+                # for handler in ms.handlers.values():
+                #     handler.shutdown_event.wait()
+            finally:
+                for cam in ms.cameras:
+                    with cam:
+                        cam.stop_streaming()

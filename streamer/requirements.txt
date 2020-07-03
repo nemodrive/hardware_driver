@@ -1,5 +1,7 @@
-yaml
-vimba
+pyyaml
+numpy
+#vimba
+pymba
 opencv-python
 pyserial
 pynmea2
