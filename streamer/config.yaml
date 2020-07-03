@@ -3,6 +3,7 @@ enabled_features:
   video_undistort: False
   gps: False
   imu: False
+  monitoring_panel: True
 
 camera_serial_numbers:
   center: 50-0536957144

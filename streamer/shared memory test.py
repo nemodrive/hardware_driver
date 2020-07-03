@@ -3,6 +3,7 @@ import logging
 from multiprocessing import Manager, Lock, Process, Event, Value, shared_memory
 from ctypes import c_char_p
 import numpy as np
+import pickle
 
 from copy import deepcopy
 
@@ -22,6 +23,8 @@ class CameraSharedMemProvider:
         self._frame_cache_lock = Lock()
 
         self._shm_addr = manager.Value(c_char_p, "")
+        self._buffer_dtype = manager.Value(c_char_p, "")
+        self._buffer_shape = manager.Value(c_char_p, "")
 
         self._worker = None
         self._spawn_worker()
@@ -33,16 +36,19 @@ class CameraSharedMemProvider:
         self._worker_running.set()
         self._worker = Process(
                           target=self._blueprint,
-                          args=(self._shm_addr, self._frame_cache_lock, self._worker_running, self._worker_initialized)
+                          args=(self._shm_addr, self._buffer_dtype, self._buffer_shape, self._frame_cache_lock, self._worker_running, self._worker_initialized)
                       )
         self._worker.start()
         self._worker_initialized.wait()  # wait for the shared memory block address
         self._child_shm = shared_memory.SharedMemory(name=self._shm_addr.value)
-        self._child_frame_buffer = np.frombuffer(self._child_shm.buf)
+
+        _shape = pickle.loads(self._buffer_shape.value)
+        _dtype = pickle.loads(self._buffer_dtype.value)
+        self._child_frame_buffer = np.ndarray(shape=_shape, dtype=_dtype, buffer=self._child_shm.buf)
 
         logging.debug("Provider process init successful")
 
-    def _blueprint(self, shm_addr: Value, frame_cache_lock: Lock, is_running: Event, worker_initialized: Event) -> None:
+    def _blueprint(self, shm_addr: Value, buffer_dtype: Value, buffer_shape: Value, frame_cache_lock: Lock, is_running: Event, worker_initialized: Event) -> None:
 
         # TODO get the first frame from the camera
         frame_1 = np.random.random((2064, 1544))
@@ -50,7 +56,11 @@ class CameraSharedMemProvider:
         shm = shared_memory.SharedMemory(create=True, size=frame_1.nbytes)
         frame_buffer = np.ndarray(frame_1.shape, dtype=frame_1.dtype, buffer=shm.buf)
 
+        frame_buffer[:] = frame_1[:]
+
         shm_addr.value = shm.name
+        buffer_dtype.value = pickle.dumps(frame_1.dtype)
+        buffer_shape.value = pickle.dumps(frame_1.shape)
 
         worker_initialized.set()
 
