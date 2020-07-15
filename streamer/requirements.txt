@@ -5,3 +5,4 @@ pymba
 opencv-python
 pyserial
 pynmea2
+scipy
