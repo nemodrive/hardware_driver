@@ -2,7 +2,7 @@ pyyaml
 numpy
 #vimba
 pymba
-opencv-python
+opencv-contrib-python
 pyserial
 pynmea2
 scipy
