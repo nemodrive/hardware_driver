@@ -66,6 +66,7 @@ class CameraSharedMemProvider:
 
         _shape = pickle.loads(self._buffer_shape.value)
         _dtype = pickle.loads(self._buffer_dtype.value)
+
         self._child_frame_buffer = np.ndarray(shape=_shape, dtype=_dtype, buffer=self._child_shm.buf)
 
         logging.debug(f"CameraProvider {self.camera_id} process init successful")
@@ -115,15 +116,19 @@ class CameraSharedMemProvider:
             # init shared memory on first frame captured
             first_frame = frame.buffer_data_numpy()
 
-            shared_mem_primitives["shm"] = shared_memory.SharedMemory(create=True, size=first_frame.nbytes)
-            shared_mem_primitives["frame_buffer"] = np.ndarray(first_frame.shape, dtype=first_frame.dtype, buffer=shared_mem_primitives["shm"].buf)
+            shared_mem_primitives["frame_buffer_lock"].acquire()
 
-            shared_mem_primitives["frame_buffer"] = first_frame[:]
+            shared_mem_primitives["shm"] = shared_memory.SharedMemory(create=True, size=first_frame.nbytes)
+
+            shared_mem_primitives["frame_buffer"] = np.ndarray(first_frame.shape, dtype=first_frame.dtype, buffer=shared_mem_primitives["shm"].buf)
+            shared_mem_primitives["frame_buffer"][:] = first_frame[:]
 
             shared_mem_primitives["shm_addr"].value = shared_mem_primitives["shm"].name
             shared_mem_primitives["buffer_dtype"].value = pickle.dumps(first_frame.dtype)
             shared_mem_primitives["buffer_shape"].value = pickle.dumps(first_frame.shape)
-            shared_mem_primitives["pixel_fomat"].value = frame.pixel_format
+            shared_mem_primitives["pixel_format"].value = frame.pixel_format
+
+            shared_mem_primitives["frame_buffer_lock"].release()
 
             # notify main process that shared memory is ready to use
             shared_mem_primitives["ready_event"].set()

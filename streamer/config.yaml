@@ -2,13 +2,18 @@ enabled_features:
   video: True
   video_undistort: False
   gps: False
-  imu: False
+  imu: True
   monitoring_panel: True
 
-camera_serial_numbers:
-  center: 50-0536957144
-  left: 50-0536955287
-  right: 50-0536957147
+#camera_serial_numbers:
+#  center: 50-0536957144
+#  left: 50-0536955287
+#  right: 50-0536957147
+
+camera_ids:
+  center: DEV_000F315CDD58
+  left: DEV_000F315CD617
+  right: DEV_000F315CDD5B
 
 camera_auto_features:
   auto_adjust_packet_size: True
@@ -16,7 +21,8 @@ camera_auto_features:
   auto_white_balance: False
   auto_iso: False
 
-gps_port: COM7
+gps_port: /dev/ttyACM1
+imu_port: /dev/ttyACM0
 
 car_data_server:
   host: 0.0.0.0
