@@ -8,27 +8,10 @@ import time
 import signal
 import libs.yei3.threespace_api as ts_api
 
-filter_flag = ts_api.TSS_FIND_ALL_KNOWN ^ ts_api.TSS_FIND_DNG
-device_list = ts_api.getComPorts(filter=filter_flag)
 
-com_port, friendly_name, device_type = device_list[0]
-
-device = None
-if device_type == "USB":
-    device = ts_api.TSUSBSensor(com_port=com_port)
-elif device_type == "WL":
-    device = ts_api.TSWLSensor(com_port=com_port)
-elif device_type == "EM":
-    device = ts_api.TSEMSensor(com_port=com_port)
-elif device_type == "DL":
-    device = ts_api.TSDLSensor(com_port=com_port)
-elif device_type == "BT":
-    device = ts_api.TSBTSensor(com_port=com_port)
-
-
+device = ts_api.TSUSBSensor(com_port="/dev/ttyACM0")
 
 terminate = False
-
 
 def _handle_signal(signum, frame):
     global terminate
@@ -87,8 +70,8 @@ if device is not None:
         for i in range(x.shape[0]):
             rp = crt_quat.rotate([x[i], y[i], z[i]])
 
-            x_rot[i] = rp[0]
-            y_rot[i] = rp[1]
+            x_rot[i] = rp[1]
+            y_rot[i] = rp[0]
             z_rot[i] = rp[2]
 
         ax.plot(x_rot, y_rot, z_rot, color='blue', label='rotated')
