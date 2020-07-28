@@ -1,0 +1,227 @@
+<?xml version="1.0" ?>
+<Root>
+    <FirmwareVersion>TSS-USB v2.6.0 04Sep2019L3</FirmwareVersion>
+    <SuiteVersion>1.1.7</SuiteVersion>
+    <Tare>
+        <X>-0.01385168731212616</X>
+        <Y>0.7200585007667542</Y>
+        <Z>-0.01909324899315834</Z>
+        <W>-0.6935123205184937</W>
+    </Tare>
+    <Trust>
+        <AccelMin>0.0009990009712055326</AccelMin>
+        <AccelMax>0.0625</AccelMax>
+        <CompassMin>0.0009990009712055326</CompassMin>
+        <CompassMax>0.0625</CompassMax>
+    </Trust>
+    <RefMode>1</RefMode>
+    <StaticRef>
+        <Compass>
+            <X>0</X>
+            <Y>-0.8298392295837402</Y>
+            <Z>0.5580025315284729</Z>
+        </Compass>
+        <Accel>
+            <X>0</X>
+            <Y>1</Y>
+            <Z>0</Z>
+        </Accel>
+    </StaticRef>
+    <Gyro>
+        <Index0>1</Index0>
+        <Index1>0</Index1>
+        <Index2>0</Index2>
+        <Index3>0</Index3>
+        <Index4>1</Index4>
+        <Index5>0</Index5>
+        <Index6>0</Index6>
+        <Index7>0</Index7>
+        <Index8>1</Index8>
+        <Index9>0.004194591194391251</Index9>
+        <Index10>0.0005301806959323585</Index10>
+        <Index11>-0.002815916435793042</Index11>
+    </Gyro>
+    <Accel>
+        <Index0>0.9838066697120667</Index0>
+        <Index1>0.04013919085264206</Index1>
+        <Index2>-0.007644076831638813</Index2>
+        <Index3>-0.0900261178612709</Index3>
+        <Index4>0.9545671343803406</Index4>
+        <Index5>0.03364968299865723</Index5>
+        <Index6>-0.007164348848164082</Index6>
+        <Index7>-0.017622560262680054</Index7>
+        <Index8>1.015105128288269</Index8>
+        <Index9>0.007384577766060829</Index9>
+        <Index10>-0.0007630184991285205</Index10>
+        <Index11>0.0038054315373301506</Index11>
+    </Accel>
+    <Compass>
+        <Index0>0.9574424028396606</Index0>
+        <Index1>0.026423098519444466</Index1>
+        <Index2>-0.056057605892419815</Index2>
+        <Index3>-0.05813766270875931</Index3>
+        <Index4>1.0161631107330322</Index4>
+        <Index5>0.026590358465909958</Index5>
+        <Index6>0.003986393567174673</Index6>
+        <Index7>-0.040312476456165314</Index7>
+        <Index8>1.004457950592041</Index8>
+        <Index9>-0.024931026622653008</Index9>
+        <Index10>-0.00994039885699749</Index10>
+        <Index11>0.0672091394662857</Index11>
+    </Compass>
+    <CalibrationMode>1</CalibrationMode>
+    <SensorsEnabled>
+        <Gyro>true</Gyro>
+        <Accel>true</Accel>
+        <Compass>true</Compass>
+    </SensorsEnabled>
+    <AxisDir>0</AxisDir>
+    <LED>
+        <R>0</R>
+        <G>0</G>
+        <B>1</B>
+    </LED>
+    <LEDMode>0</LEDMode>
+    <Joystick>
+        <Axes>
+            <Axis index="0">
+                <DataPoint>0</DataPoint>
+                <DataPoint>0</DataPoint>
+                <DataPoint>-1</DataPoint>
+                <DataPoint>0</DataPoint>
+                <DataPoint>1</DataPoint>
+                <DataPoint>0</DataPoint>
+                <DataPoint>0.029999999329447746</DataPoint>
+                <DataPoint>1.6666666269302368</DataPoint>
+                <DataPoint>1</DataPoint>
+            </Axis>
+            <Axis index="0">
+                <DataPoint>1</DataPoint>
+                <DataPoint>0</DataPoint>
+                <DataPoint>0</DataPoint>
+                <DataPoint>0</DataPoint>
+                <DataPoint>1</DataPoint>
+                <DataPoint>0</DataPoint>
+                <DataPoint>0.029999999329447746</DataPoint>
+                <DataPoint>1.6666666269302368</DataPoint>
+                <DataPoint>1</DataPoint>
+            </Axis>
+            <Axis index="255"/>
+        </Axes>
+        <Buttons>
+            <Button index="0">
+                <DataPoint>0</DataPoint>
+            </Button>
+            <Button index="0">
+                <DataPoint>1</DataPoint>
+            </Button>
+            <Button index="2">
+                <DataPoint>0</DataPoint>
+                <DataPoint>0</DataPoint>
+                <DataPoint>0</DataPoint>
+                <DataPoint>0.5</DataPoint>
+            </Button>
+            <Button index="255"/>
+            <Button index="255"/>
+            <Button index="255"/>
+            <Button index="255"/>
+            <Button index="255"/>
+        </Buttons>
+    </Joystick>
+    <Mouse>
+        <Axes>
+            <Axis index="1">
+                <DataPoint>1</DataPoint>
+                <DataPoint>0.5</DataPoint>
+                <DataPoint>0</DataPoint>
+                <DataPoint>2</DataPoint>
+                <DataPoint>0</DataPoint>
+                <DataPoint>0</DataPoint>
+                <DataPoint>0</DataPoint>
+                <DataPoint>50</DataPoint>
+                <DataPoint>0</DataPoint>
+                <DataPoint>0</DataPoint>
+            </Axis>
+            <Axis index="1">
+                <DataPoint>1</DataPoint>
+                <DataPoint>0.4000000059604645</DataPoint>
+                <DataPoint>1</DataPoint>
+                <DataPoint>2</DataPoint>
+                <DataPoint>0</DataPoint>
+                <DataPoint>0</DataPoint>
+                <DataPoint>0</DataPoint>
+                <DataPoint>50</DataPoint>
+                <DataPoint>0</DataPoint>
+                <DataPoint>0</DataPoint>
+            </Axis>
+        </Axes>
+        <Buttons>
+            <Button index="0">
+                <DataPoint>0</DataPoint>
+            </Button>
+            <Button index="0">
+                <DataPoint>1</DataPoint>
+            </Button>
+            <Button index="255"/>
+            <Button index="255"/>
+            <Button index="255"/>
+            <Button index="255"/>
+            <Button index="255"/>
+            <Button index="255"/>
+        </Buttons>
+    </Mouse>
+    <RunningAvg>
+        <Gyro>0</Gyro>
+        <Accel>0</Accel>
+        <Compass>0</Compass>
+        <Orient>0</Orient>
+    </RunningAvg>
+    <Oversample>
+        <Gyro>1</Gyro>
+        <Accel>1</Accel>
+        <Compass>1</Compass>
+    </Oversample>
+    <Ranges>
+        <Gyro>3</Gyro>
+        <Accel>0</Accel>
+        <Compass>1</Compass>
+    </Ranges>
+    <FilterMode>1</FilterMode>
+    <EulerOrder>5</EulerOrder>
+    <StreamingSlots>
+        <Slot1>0</Slot1>
+        <Slot2>6</Slot2>
+        <Slot3>38</Slot3>
+        <Slot4>39</Slot4>
+        <Slot5>40</Slot5>
+        <Slot6>255</Slot6>
+        <Slot7>255</Slot7>
+        <Slot8>255</Slot8>
+    </StreamingSlots>
+    <StreamingTiming>
+        <Interval>20000</Interval>
+        <Duration>4294967295</Duration>
+        <Delay>0</Delay>
+    </StreamingTiming>
+    <WiredResponseHeaderBitfield>2</WiredResponseHeaderBitfield>
+    <Offset>
+        <X>0</X>
+        <Y>0</Y>
+        <Z>0</Z>
+        <W>1</W>
+    </Offset>
+    <BaudRate>115200</BaudRate>
+    <StepTracking>
+        <UnitSelect>0</UnitSelect>
+        <RatioMinimum>0.4000000059604645</RatioMinimum>
+        <RatioMaximum>1.7999999523162842</RatioMaximum>
+        <DutyCycleMinimum>0.4000000059604645</DutyCycleMinimum>
+        <DutyCycleMaximum>1.7999999523162842</DutyCycleMaximum>
+        <AmplitudeMinimum>0.02500000037252903</AmplitudeMinimum>
+        <AmplitudeMaximum>1</AmplitudeMaximum>
+        <DurationMinimum>0.5</DurationMinimum>
+        <DurationMaximum>1.399999976158142</DurationMaximum>
+        <StrideSlope>0.023800000548362732</StrideSlope>
+        <StrideOffset>-1.04830002784729</StrideOffset>
+    </StepTracking>
+</Root>

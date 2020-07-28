@@ -1,15 +1,13 @@
-import socket
-import yaml
 import logging
-import time
 import pickle
-from multiprocessing import Process, Manager, Value, Event
-from typing import List, Dict
-import random
-from datetime import datetime
 import signal  # ensure graceful exit
+import socket
+from multiprocessing import Process, Manager, Event
+from typing import List
 
-from combined import SimpleStreamer
+import yaml
+
+from streamer import SharedMemStreamer
 
 HEADER_SIZE = 10
 
@@ -51,28 +49,6 @@ def accept_clients_thread(clients: List, running: Event()):
     main_socket.close()
 
 
-# def generate_mock_data_packet():
-#     yield {
-#
-#         "images": {
-#             "left": "A" * 1024,
-#             "center": "A" * 1024,
-#             "right": "A" * 1024,
-#         },
-#         "sensor_data": {
-#             "gps":
-#                 {
-#                     "GGA": "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47",
-#                     "GSA": "$GPGSA,A,3,04,05,,09,12,,,24,,,,,2.5,1.3,2.1*39",
-#                 },
-#             "imu": {
-#
-#             }
-#         },
-#         "datetime": datetime.now(),
-#     }
-
-
 def main():
 
     manager = Manager()
@@ -84,11 +60,11 @@ def main():
     accept_clients_worker = Process(target=accept_clients_thread, args=(clients, worker_running))
     accept_clients_worker.start()
 
-    grabber = SimpleStreamer()
+    stream = SharedMemStreamer()
 
     while server_running:
 
-        data_packet = next(grabber.stream_generator())
+        data_packet = next(stream.stream_generator())
 
         # TODO don't send images if client does not request them
 

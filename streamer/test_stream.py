@@ -1,16 +1,14 @@
 import cv2
-from vimba import *
-
-from combined import SimpleStreamer
+from streamer import SharedMemStreamer
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
 
 if __name__ == '__main__':
 
-    grabber = SimpleStreamer()
+    stream = SharedMemStreamer()
 
-    for packet in grabber.stream_generator():
+    for packet in stream.stream_generator():
 
         print(packet)
 

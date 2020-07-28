@@ -1,0 +1,15 @@
+- Vimba SDK + Vimba Viewer
+
+https://www.alliedvision.com/en/products/software.html
+https://cdn.alliedvision.com/fileadmin/content/documents/products/software/software/Vimba/appnote/Vimba_installation_under_Linux.pdf
+
+Then activate your conda env, go to ./VimbaPython and run python setup.py install.
+A version of the above Vimba SDK is included because the Vimba SDK and Vimba Python versions are correlated and only some combinations work together!
+
+- YOST Labs IMU Suite
+
+https://yostlabs.com/yost-labs-3-space-sensor-software-suite/
+
+- UBLOX U-Center ( only works on windows ¯\_(ツ)_/¯ )
+
+https://www.u-blox.com/en/product/u-center
