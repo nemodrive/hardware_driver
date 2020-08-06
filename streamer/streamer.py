@@ -7,8 +7,8 @@ from datetime import datetime
 from typing import Dict
 
 import libs.yei3.threespace_api as ts_api
-from gps_provider import GPSProvider
-from camera_provider import CameraSharedMemProvider
+from providers.gps_provider import GPSProvider
+from providers.camera_provider import CameraSharedMemProvider
 
 
 class SharedMemStreamer:
