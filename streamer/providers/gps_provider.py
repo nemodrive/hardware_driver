@@ -11,14 +11,18 @@ NMEACache = Dict[str, pynmea2.TalkerSentence]
 
 
 class GPSProvider:
+    """
+    GPSProvider spawns a child worker process which constantly receives data from the gps.
+    When getter methods are called, the shared memory cache of the worker is interrogated to get the latest
+        messages asynchronously.
+    """
 
     def __init__(self, gps_port: str):
         """
-        GPSProvider spawns a child worker process which constantly receives data from the gps.
-        When getter methods are called, the shared memory cache of the worker is interrogated to get the latest
-        messages asynchronously
+        Instantiates the shared memory buffer and starts the worker.
 
-        :param gps_port: serial port where the gps device is connected
+        Args:
+            gps_port (str): Serial port where the gps device is connected
         """
 
         manager = Manager()  # fun fact, make this self.manager and watch the world burn
@@ -33,6 +37,7 @@ class GPSProvider:
         self._spawn_worker()
 
     def _spawn_worker(self) -> None:
+        """Starts the worker process"""
 
         logging.debug("GPS Provider is spawning a new worker process")
 
@@ -44,6 +49,15 @@ class GPSProvider:
         self._worker.start()
 
     def _blueprint(self, gps_port: str, gps_cache: NMEACache, gps_cache_lock: Lock, is_running: Event) -> None:
+        """
+        Blueprint for the GPS worker which will perpetually receive packets from the physical device.
+
+        Args:
+            gps_port (str): Serial port where the gps device is connected
+            gps_cache (NMEACache): Cache where received packages will be stored
+            gps_cache_lock (Lock): Lock for safely accessing the gps_cache
+            is_running (Event): The process will shut down when this event is cleared
+        """
 
         with serial.Serial(gps_port, baudrate=9600, timeout=None) as serial_port:
 
@@ -61,7 +75,7 @@ class GPSProvider:
                     nmea_msg = pynmea2.parse(raw_message.decode())
                 except pynmea2.nmea.ParseError as e:
                     # package is compromised, maybe checksum verification failed, we'll skip this one
-                    print("GPS received malformed NMEA message!!!!")  # TODO add to main logger
+                    logging.debug("GPS received malformed NMEA message!!!")
                     continue
 
                 # TODO also log raw gps output to make sure its ok
@@ -77,7 +91,7 @@ class GPSProvider:
     def close(self) -> None:
         """
         This method terminates the worker process, clears the cache, and frees all other used resources
-        in preparation for a graceful shutdown
+        in preparation for a graceful shutdown.
         """
 
         # stop worker process
@@ -103,7 +117,12 @@ class GPSProvider:
         self.close()
 
     def get_latest_messages(self) -> NMEACache:
-        """Get the latest messages received for each category"""
+        """
+        Get the latest messages received for each category.
+
+        Returns:
+            NMEACache: A compilation of the last known value for each message type
+        """
 
         # TODO check worker.is_alive() and check timestamps for the packages are reasonable,
         #  else clear the cache and attempt to restart the worker?

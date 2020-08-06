@@ -24,7 +24,7 @@ def publisher():
     with open(os.path.join(script_path, "config.yaml"), "r") as f:
         settings = yaml.load(f, Loader=yaml.SafeLoader)
 
-    string_publisher = rospy.    Publisher('nemo_streamer', String, queue_size=settings["queue_size"])
+    string_publisher = rospy.Publisher('nemo_streamer', String, queue_size=settings["queue_size"])
     imu_publisher = rospy.Publisher('nemo_imu', Imu, queue_size=settings["queue_size"])
     nmea_publisher = rospy.Publisher('nmea_sentence', Sentence, queue_size=settings["queue_size"]) # TODO make sure nobody is publishing to this same topic
 
@@ -59,7 +59,7 @@ def publisher():
 
                 message += last
 
-            packet = pickle.loads(message)
+            packet = pickle.loads(message)  # TODO request that server skips sending images
 
             # packet was received, preparing to send multiple ROS messages derived from it
 

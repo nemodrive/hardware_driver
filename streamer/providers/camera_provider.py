@@ -11,19 +11,26 @@ import pickle
 import cv2
 from pymba import Vimba, Frame, camera
 
-# todo add more colours
+
 PIXEL_FORMATS_CONVERSIONS = {
     'BayerRG8': cv2.COLOR_BAYER_RG2RGB,
+    # todo add more colours
 }
 
 
 class CameraSharedMemProvider:
+    """
+    CameraSharedMemProvider spawns a child worker process which constantly receives data from the camera.
+    When getter methods are called, the shared memory cache of the worker is interrogated to get the latest
+        available frame asynchronously.
+    """
 
-    def __init__(self, camera_id):
+    def __init__(self, camera_id: str):
         """
-        CameraSharedMemProvider spawns a child worker process which constantly receives data from the camera.
-        When getter methods are called, the shared memory cache of the worker is interrogated to get the latest
-        available frame asynchronously
+        Instantiates the shared memory block and starts the worker process which receives frames from the camera.
+
+        Args:
+            camera_id (str): Allied Vision camera id e.g. DEV_000000000000
         """
 
         self.camera_id = camera_id
@@ -111,6 +118,14 @@ class CameraSharedMemProvider:
             logging.debug("Provider worker process has stopped correctly")  # TODO enable logging from worker process
 
     def _on_frame_ready(self, frame: Frame, shared_mem_primitives: Dict, delay: Optional[int] = 1) -> None:
+        """
+        Pymba callback method, modified to fit shared memory needs
+
+        Args:
+            frame (Frame): Pymba will store the received frame here when it calls this method
+            shared_mem_primitives (Dict): Object that facilitates communication between the two libraries
+            delay (Optional[int]): TODO
+        """
 
         if not shared_mem_primitives["ready_event"].is_set():
             # init shared memory on first frame captured
@@ -168,7 +183,12 @@ class CameraSharedMemProvider:
         self.close()
 
     def get_last_frame_raw(self) -> np.ndarray:
-        """Get the latest frame"""
+        """
+        Get the latest frame
+
+        Returns:
+            np.ndarray: original frame as sent by the camera
+        """
 
         # TODO check worker.is_alive() and check timestamps for the packages are reasonable,
         #  else clear the buffer and attempt to restart the worker?
@@ -182,7 +202,13 @@ class CameraSharedMemProvider:
         return buffer_copy
 
     def get_last_frame_as_ocv(self) -> np.ndarray:
-        """Get the latest frame in opencv compatible format"""
+        """
+        Get the latest frame in OpenCV compatible format
+
+        Returns:
+            np.ndarray: OpenCV BGR format image
+        """
+
         raw_frame = self.get_last_frame_raw()
         return cv2.cvtColor(raw_frame, PIXEL_FORMATS_CONVERSIONS[self._pixel_format.value])
 
