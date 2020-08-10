@@ -15,19 +15,14 @@ camera_ids:
   left: DEV_000F315CD617
   right: DEV_000F315CDD5B
 
-camera_auto_features:
-  auto_adjust_packet_size: True
-  auto_exposure: False
-  auto_white_balance: False
-  auto_iso: False
-
 gps_port: /dev/ttyACM1
 imu_port: /dev/ttyACM0
 
 can_device: vcan0
 can_dbc_file: logan.dbc
 
-car_data_server:
+network_streaming:
   host: 0.0.0.0
   port: 6366
   header_size: 10
+  recv_buffer: 104857600
