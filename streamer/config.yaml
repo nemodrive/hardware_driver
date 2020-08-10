@@ -18,6 +18,9 @@ camera_ids:
 gps_port: /dev/ttyACM1
 imu_port: /dev/ttyACM0
 
+can_device: vcan0
+can_dbc_file: logan.dbc
+
 network_streaming:
   host: 0.0.0.0
   port: 6366
