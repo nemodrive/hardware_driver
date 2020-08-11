@@ -37,7 +37,7 @@ def main():
 
                 img = data_packet["images"][pos]
 
-                img = cv2.resize(img, (int(img.shape[1] / 3), int(img.shape[0] / 3)))
+                img = cv2.resize(img, (int(img.shape[1] / 2.5), int(img.shape[0] / 2.5)))
 
                 retval, data_packet["images"][pos] = cv2.imencode(".jpg", img)
 

@@ -8,3 +8,4 @@ pynmea2
 scipy
 pyqt5
 pyqt5-tools
+pyqtgraph
