@@ -158,6 +158,7 @@ class ThreadedBroadcastServer:
             sender_queue, is_running = worker_info
 
             if is_running.is_set():
+                # TODO if queue is very large only send when it clears up
                 sender_queue.put(message)
             else:
                 disconnected_clients.append(i)
