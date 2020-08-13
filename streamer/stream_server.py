@@ -1,7 +1,8 @@
 import signal  # ensure graceful exit
 import yaml
 
-from streamer import SharedMemStreamer
+# from streamer import SharedMemStreamer
+from streamer_simulator import SimulatedStreamer
 from network.threaded_server import ThreadedBroadcastServer
 
 
@@ -19,7 +20,8 @@ signal.signal(signal.SIGINT, _handle_signal)
 
 def main():
 
-    streamer = SharedMemStreamer()
+    # streamer = SharedMemStreamer()
+    streamer = SimulatedStreamer()
 
     with open("config.yaml", "r") as f:
         settings = yaml.load(f, Loader=yaml.SafeLoader)["network_streaming"]
@@ -34,6 +36,8 @@ def main():
             # TODO optionally compress images
 
             server.send_object(data_packet)
+            print(data_packet)
+            input("Press Enter to continue ...")
 
 
 if __name__ == '__main__':
