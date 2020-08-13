@@ -5,13 +5,15 @@ import yaml
 import rospy
 import os
 import time
+import zlib
 
 from std_msgs.msg import String, Header
-from geometry_msgs.msg import Quaternion, Vector3
+from geometry_msgs.msg import Quaternion, Vector3, Twist, Pose, Point, PoseWithCovariance, TwistWithCovariance
 from sensor_msgs.msg import Imu
 from nmea_msgs.msg import Sentence
+from nav_msgs.msg import Odometry
 
-host = '192.168.100.128'  # '192.168.183.130'
+host = '127.0.0.1' # '192.168.100.128'  # '192.168.183.130'
 port = 6366
 HEADER_SIZE = 10
 BUFFER_SIZE = 16
@@ -27,6 +29,8 @@ def publisher():
     string_publisher = rospy.Publisher('nemo_streamer', String, queue_size=settings["queue_size"])
     imu_publisher = rospy.Publisher('nemo_imu', Imu, queue_size=settings["queue_size"])
     nmea_publisher = rospy.Publisher('nmea_sentence', Sentence, queue_size=settings["queue_size"]) # TODO make sure nobody is publishing to this same topic
+    speed_publisher = rospy.Publisher('nemo_odom', Odometry, queue_size=settings["queue_size"])
+
 
     client_socket = socket.socket()
 
@@ -59,6 +63,7 @@ def publisher():
 
                 message += last
 
+            message = zlib.decompress(message)
             packet = pickle.loads(message)  # TODO request that server skips sending images
 
             # packet was received, preparing to send multiple ROS messages derived from it
@@ -70,11 +75,12 @@ def publisher():
             # rospy.loginfo(str(packet))
 
             nemo_header = Header()  # will be used for all messages which require headers
-            nemo_header.stamp = rospy.Time.now()  # TODO get from packet timestamp
+            #nemo_header.stamp = rospy.Time.now()  # TODO get from packet timestamp
+            nemo_header.stamp = rospy.Time.from_sec(packet["datetime"])
 
             # send IMU message http://docs.ros.org/api/sensor_msgs/html/msg/Imu.html
-
             imu_packet = packet["sensor_data"]["imu"]
+            rospy.logdebug(imu_packet)
 
             imu_msg = Imu(
                 header=nemo_header,
@@ -97,10 +103,9 @@ def publisher():
             )
 
             imu_publisher.publish(imu_msg)
-            rospy.loginfo(str(imu_msg))
+            # rospy.loginfo(str(imu_msg))
 
             # send GPS data to nmea_topic_driver of nmea_navsat_driver package
-
             for msg_type, msg_str in packet["sensor_data"]["gps"].items():
 
                 # TODO caching might flood the ROS nmea_driver package, inspect this
@@ -112,6 +117,24 @@ def publisher():
 
                 nmea_publisher.publish(nmea_msg)
                 # rospy.loginfo(str(nmea_msg))
+
+            # send speed data to nemo_odometry topic
+            speed_data = packet["sensor_data"]["speed"]
+            mps = speed_data["mps"]
+            odom_msg = Odometry(header=nemo_header)
+            odom_msg.header.frame_id = "odom"
+
+            # pose will not be used, so we are setting it to constant zero
+            odom_msg.pose = PoseWithCovariance(pose=Pose(position=Point(0.0, 0.0, 0.0),
+                                                         orientation=Quaternion(0, 0, 0, 0)))
+
+            # for the twist we are currently specifying the speed only on the X axis
+            # TODO: the speed value needs to be broken down based on the IMU or GPS values (or difference of values)
+            odom_msg.twist = TwistWithCovariance(twist=Twist(linear=Vector3(mps, 0, 0),
+                                                             angular=Vector3(0, 0, 0)))
+            rospy.loginfo(str(odom_msg))
+
+            speed_publisher.publish(odom_msg)
 
             _end_time = time.time()
 
