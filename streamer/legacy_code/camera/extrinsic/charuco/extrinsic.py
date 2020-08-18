@@ -206,6 +206,7 @@ for f, meas in calib_samples.items():
         # TODO interp1d
 
         show_small(meas_draw, "edges")
+        cv2.imwrite("edges.jpg", cv2.resize(meas_draw, (int(meas_draw.shape[1] / 2), int(meas_draw.shape[0] / 2))))
         cv2.waitKey(0)
 
     else:
