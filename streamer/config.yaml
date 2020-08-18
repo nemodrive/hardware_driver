@@ -15,6 +15,10 @@ camera_ids:
   left: DEV_000F315CD617
   right: DEV_000F315CDD5B
 
+video_resolution:
+  width: 2064
+  height: 1544
+
 gps_port: /dev/ttyACM1
 imu_port: /dev/ttyACM0
 
