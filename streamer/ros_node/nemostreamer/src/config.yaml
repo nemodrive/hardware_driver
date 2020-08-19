@@ -1,11 +1,11 @@
 queue_size: 10
 imu:
-  orientation_covariance: [0.0, 0, 0,
-                           0, 0.0, 0,
-                           0, 0, 0.0]
-  angular_velocity_covariance: [0.0, 0, 0,
-                                0, 0.0, 0,
-                                0, 0, 0.0]
-  linear_acceleration_covariance: [0.0, 0, 0,
-                                   0, 0.0, 0,
-                                   0, 0, 0.0]
+  orientation_covariance: [0.5, 0, 0,
+                           0, 0.5, 0,
+                           0, 0, 0.5]
+  angular_velocity_covariance: [0.5, 0, 0,
+                                0, 0.5, 0,
+                                0, 0, 0.5]
+  linear_acceleration_covariance: [0.5, 0, 0,
+                                   0, 0.5, 0,
+                                   0, 0, 0.5]
