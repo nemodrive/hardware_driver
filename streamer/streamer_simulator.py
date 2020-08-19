@@ -118,9 +118,12 @@ class SimulatedStreamer:
                 long_direction = "W"
 
             packet["sensor_data"]["gps"] = {
-                "GGA": pynmea2.GGA('GP', 'GGA', (str(current_ts), lat_repr, lat_direction, long_repr, long_direction,
+                "GGA": {
+                    "msg": pynmea2.GGA('GP', 'GGA', (str(current_ts), lat_repr, lat_direction, long_repr, long_direction,
                                                  '1', '04', '2.6', "%f" % self.log_data[GPS_ALT][ts_rest_idx],
-                                                 'M', '35.8953', 'M', '', '0000'))
+                                                 'M', '35.8953', 'M', '', '0000')),
+                    "timestamp": current_ts
+                }
             }
 
             # set speed data

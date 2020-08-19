@@ -155,6 +155,9 @@ class SharedMemStreamer:
                 return_packet["sensor_data"]["gps"] = {}
 
                 for msg_type, msg_value in gps_msgs.items():
-                    return_packet["sensor_data"]["gps"][msg_type] = str(msg_value)
+                    return_packet["sensor_data"]["gps"][msg_type] = {
+                        "msg": str(msg_value),
+                        "timestamp": msg_value.timestamp
+                    }
 
             yield return_packet
