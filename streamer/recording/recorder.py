@@ -32,7 +32,7 @@ class VideoWriteBuffer:
         # self._video_writer = cv2.VideoWriter(self.path, self._fourcc, 60.0, self.resolution)
 
         self._fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        self._video_writer = cv2.VideoWriter(self.path, self._fourcc, 11.0, self.resolution)
+        self._video_writer = cv2.VideoWriter(self.path, self._fourcc, 100.0, self.resolution)
 
         self._crt_frame = 0
 
@@ -127,22 +127,20 @@ class Recorder:
      which has to be extracted from the appropriate video file.
     """
 
-    def __init__(self, source_generator: Iterator[dict], out_path: Optional[str] = "./test_recording/"):
+    def __init__(self, out_path: Optional[str] = "./test_recording/"):
         """
         Instantiates the Recorder with the details of the dataset that will be recorded.
         To be ready for recording start() needs to be called.
         This is done automatically if the Recorder is called within a Python "with" statement.
 
         Args:
-            source_generator (Iterator[dict]): Data generator that will be recorded
             out_path (Optional[str]): Directory where the dataset will be saved on disk
         """
 
-        self.source_generator = source_generator
         self.out_path = out_path
 
         # load settings from configuration file
-        with open("../config.yaml", "r") as f:
+        with open(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config.yaml")), "r") as f:
             self.settings = yaml.load(f, Loader=yaml.SafeLoader)
 
         self.enabled_positions = self.settings["camera_ids"].keys()
@@ -198,6 +196,8 @@ class Recorder:
             packet (dict): Data packet as provided by Streamer type objects.
         """
 
+        packet = deepcopy(packet)  # making sure no one edits it later
+
         images = packet["images"]
         saved_images = {}
 
@@ -227,7 +227,7 @@ class Player:
         self.in_path = in_path
 
         # load settings from configuration file
-        with open("../config.yaml", "r") as f:
+        with open(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config.yaml")), "r") as f:
             self.settings = yaml.load(f, Loader=yaml.SafeLoader)
 
         self.enabled_positions = self.settings["camera_ids"].keys()
