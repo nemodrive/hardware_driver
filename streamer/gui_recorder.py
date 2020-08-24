@@ -13,7 +13,7 @@ import numpy as np
 
 from streamer import SharedMemStreamer
 from recording.recorder import Recorder, Player
-from compression.decompressor import Decompressor
+from compression.decompressor import Decompressor, JITDecompressor
 from compression.compressor import Compressor
 
 
@@ -49,78 +49,77 @@ class StreamThread(QThread):
 
     def run(self):
 
-        # streamer = SharedMemStreamer()
+        streamer = SharedMemStreamer()
         # TODO give it a warmup period?
-        # source_stream = streamer.stream_generator()
+        source_stream = streamer.stream_generator()
 
-        with Player(in_path="saved_datasets/recording_1") as p:
+        compressed_source_stream = Compressor(source_stream).compressed_generator()
 
-            # compressed_source_stream = p.stream_generator(True)
+        with Recorder(out_path=self.rec_path) as r:
 
-            source_stream = Decompressor(p.stream_generator(True)).uncompressed_generator()
+            telemetry_delay = self.telemetry_delay_frames + 1
+            multiple_delay_ms = []
 
-            compressed_source_stream = Compressor(source_stream).compressed_generator()
+            last_time = time.time()
 
-            with Recorder(out_path=self.rec_path) as r:
+            jit_decompressor = JITDecompressor()
 
-                telemetry_delay = self.telemetry_delay_frames + 1
-                multiple_delay_ms = []
+            while self._is_running:
 
+                recv_obj = next(compressed_source_stream)
+
+                r.record_packet(recv_obj)
+
+                # show telemetry to user
+
+                recv_obj = jit_decompressor.decompress_next_packet(recv_obj)
+
+                for pos in recv_obj["images"].keys():
+                    recv_obj["images"][pos] = cv2.resize(recv_obj["images"][pos],
+                                                         (int(recv_obj["images"][pos].shape[1] / 2.8),
+                                                          int(recv_obj["images"][pos].shape[0] / 2.8)))
+
+                # TODO always check key exists!!! also in streamer
+                try:
+                    self.signal_change_pixmap_left.emit(self.img_ocv_to_qt(recv_obj["images"]["left"]))
+                except:
+                    pass
+
+                try:
+                    self.signal_change_pixmap_center.emit(self.img_ocv_to_qt(recv_obj["images"]["center"]))
+                except:
+                    pass
+
+                try:
+                    self.signal_change_pixmap_right.emit(self.img_ocv_to_qt(recv_obj["images"]["right"]))
+                except:
+                    pass
+
+                delay = time.time() - last_time
                 last_time = time.time()
 
-                while self._is_running:
+                multiple_delay_ms.append(delay * 1000)
 
-                    recv_obj = next(compressed_source_stream)
-                    r.record_packet(recv_obj)
+                try:
+                    self.signal_imu.emit(recv_obj["sensor_data"]["imu"])
+                except:
+                    pass
 
-                    # show telemetry to user
+                try:
+                    self.signal_telemetry_text.emit(json.dumps(recv_obj["sensor_data"], indent=4))
+                except:
+                    pass
 
-                    for pos in recv_obj["images"].keys():
-                        recv_obj["images"][pos] = cv2.resize(recv_obj["images"][pos],
-                                                             (int(recv_obj["images"][pos].shape[1] / 2.8),
-                                                              int(recv_obj["images"][pos].shape[0] / 2.8)))
+                if telemetry_delay > self.telemetry_delay_frames:
 
-                    # TODO always check key exists!!! also in streamer
-                    try:
-                        self.signal_change_pixmap_left.emit(self.img_ocv_to_qt(recv_obj["images"]["left"]))
-                    except:
-                        pass
+                    telemetry_delay = 0
 
-                    try:
-                        self.signal_change_pixmap_center.emit(self.img_ocv_to_qt(recv_obj["images"]["center"]))
-                    except:
-                        pass
-
-                    try:
-                        self.signal_change_pixmap_right.emit(self.img_ocv_to_qt(recv_obj["images"]["right"]))
-                    except:
-                        pass
-
-                    delay = time.time() - last_time
-                    last_time = time.time()
-
-                    multiple_delay_ms.append(delay * 1000)
-
-                    try:
-                        self.signal_imu.emit(recv_obj["sensor_data"]["imu"])
-                    except:
-                        pass
-
-                    try:
-                        self.signal_telemetry_text.emit(json.dumps(recv_obj["sensor_data"], indent=4))
-                    except:
-                        pass
-
-                    if telemetry_delay > self.telemetry_delay_frames:
-
-                        telemetry_delay = 0
-
-                        avg_delay_ms = statistics.mean(multiple_delay_ms)
-                        multiple_delay_ms.clear()
-                        self.signal_fps.emit(int(1/avg_delay_ms * 1000))
-                        self.signal_ms.emit(int(avg_delay_ms))
-                    else:
-                        telemetry_delay += 1
+                    avg_delay_ms = statistics.mean(multiple_delay_ms)
+                    multiple_delay_ms.clear()
+                    self.signal_fps.emit(int(1/avg_delay_ms * 1000))
+                    self.signal_ms.emit(int(avg_delay_ms))
+                else:
+                    telemetry_delay += 1
 
     def stop(self):
         self._is_running = False

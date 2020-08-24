@@ -28,11 +28,12 @@ class VideoWriteBuffer:
         self.path = path
         self.resolution = resolution
 
-        # self._fourcc = cv2.VideoWriter_fourcc(*'H264')
-        # self._video_writer = cv2.VideoWriter(self.path, self._fourcc, 60.0, self.resolution)
-
-        self._fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        self._fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         self._video_writer = cv2.VideoWriter(self.path, self._fourcc, 100.0, self.resolution)
+
+        # self._fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        # self._video_writer = cv2.VideoWriter(self.path, self._fourcc, 100.0, self.resolution)
+
 
         self._crt_frame = 0
 
@@ -198,15 +199,18 @@ class Recorder:
 
         packet = deepcopy(packet)  # making sure no one edits it later
 
-        images = packet["images"]
-        saved_images = {}
+        if "images" in packet.keys():
+            images = packet["images"]
+            saved_images = {}
 
-        for pos, img in images.items():
-            frame_index = self.open_videos[pos].write_frame(img)
-            saved_images[pos] = frame_index
+            for pos, img in images.items():
+                frame_index = self.open_videos[pos].write_frame(img)
+                saved_images[pos] = frame_index
 
-        new_packet = deepcopy(packet)
-        new_packet["images"] = saved_images
+            new_packet = deepcopy(packet)
+            new_packet["images"] = saved_images
+        else:
+            new_packet = deepcopy(packet)
 
         pickle.dump(new_packet, self.metadata_file)
 
