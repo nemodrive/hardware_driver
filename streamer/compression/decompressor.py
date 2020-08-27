@@ -98,7 +98,8 @@ class JITDecompressor:
 
     def decompress_next_packet(self, source_packet) -> dict:
         """
-        Generator that returns the decompressed data.
+        Returns the decompressed data.
+        # TODO make the other extend this class
 
         Returns:
             dict: Decompressed packet

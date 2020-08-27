@@ -1,6 +1,6 @@
 from typing import Iterator, Optional, Tuple, List
 from copy import deepcopy
-from multiprocessing import Process, Manager, Queue, Event
+from multiprocessing import Process, Manager, Queue, Event, Pipe, connection
 import os
 
 import numpy as np
@@ -294,7 +294,7 @@ class ThreadedRecorder:
             else:
                 new_packet = deepcopy(packet)
 
-            pickle.dump(new_packet, self.metadata_file)
+            pickle.dump(new_packet, metadata_file)
 
         metadata_file.close()
 
@@ -333,7 +333,131 @@ class ThreadedRecorder:
             packet (dict): Data packet as provided by Streamer type objects.
         """
 
+        # TODO multiple queues? im1, im2, im3 and data
+
         self.packets_queue.put(packet)
+
+
+class PipedRecorder:
+    """
+    Takes in a car data generator such as the one in the Streamer class and records its output to disk for later use.
+    Images will be saved in a separate video file for each camera POV.
+    The rest of the data will be appended to a binary file using pickle.
+    The first object in the file is a dict which specifies the names of the video files for each camera.
+    Subsequent calls to pickle.load() will return the data packets.
+    If packets contain images they will specify for each camera an index of a frame,
+     which has to be extracted from the appropriate video file.
+    """
+
+    def __init__(self, out_path: Optional[str] = "./test_recording/"):
+        """
+        Instantiates the Recorder with the details of the dataset that will be recorded.
+        To be ready for recording start() needs to be called.
+        This is done automatically if the Recorder is called within a Python "with" statement.
+
+        Args:
+            out_path (Optional[str]): Directory where the dataset will be saved on disk
+        """
+
+        self.out_path = out_path
+
+        # load settings from configuration file
+        with open(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config.yaml")), "r") as f:
+            self.settings = yaml.load(f, Loader=yaml.SafeLoader)
+
+        self.enabled_positions = list(self.settings["camera_ids"].keys())
+        self.resolution = (self.settings["video_resolution"]["width"], self.settings["video_resolution"]["height"])
+
+        manager = Manager()
+
+        self.packets_pipe_send, packets_pipe_recv = Pipe() #manager.Pipe()
+        self._worker_running = manager.Event()
+
+        self.worker = Process(target=self._recorder_thread,
+                                args=(self.out_path, packets_pipe_recv, self.enabled_positions, self.resolution, self._worker_running))
+
+    def _recorder_thread(self, out_path: str, packets_pipe_recv: connection.Connection, enabled_positions: List[int], resolution: Tuple[int], running: Event):
+
+        if not os.path.exists(out_path):
+            os.makedirs(out_path)
+
+        open_videos = {}
+
+        for pos in enabled_positions:
+            path = os.path.join(out_path, f"{pos}.mp4")
+            open_videos[pos] = VideoWriteBuffer(path, resolution)
+
+        metadata_file = open(os.path.join(out_path, "metadata.pkl"), "wb")
+
+        video_paths = {}
+
+        for pos, video_writer in open_videos.items():
+            video_paths[pos] = os.path.basename(video_writer.path)
+
+        pickle.dump(video_paths, metadata_file)
+
+        while running.is_set():
+            # TODO
+
+            packet_orig = packets_pipe_recv.recv()
+
+            packet = deepcopy(packet_orig)  # making sure no one edits it later
+
+            if "images" in packet.keys():
+                images = packet["images"]
+                saved_images = {}
+
+                for pos, img in images.items():
+                    frame_index = open_videos[pos].write_frame(img)
+                    saved_images[pos] = frame_index
+
+                new_packet = deepcopy(packet)
+                new_packet["images"] = saved_images
+            else:
+                new_packet = deepcopy(packet)
+
+            pickle.dump(new_packet, metadata_file)
+
+        metadata_file.close()
+
+        for video_writer in open_videos.values():
+            video_writer.close()
+
+    def start(self):
+        """
+        Opens the video files and makes sure the Recorder is ready to receive data packets.
+        Is called automatically by __enter__() if the Recorder is called within a Python "with" statement.
+        """
+
+        self._worker_running.set()
+        self.worker.start()
+
+    def close(self):
+        """Closes video and metadata files and cleans all used resources."""
+
+        self._worker_running.clear()
+        self.worker.join()
+
+    def __enter__(self):
+        """This allows the Recorder to be (optionally) used in Python 'with' statements"""
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """This allows the Recorder to be (optionally) used in Python 'with' statements"""
+        self.close()
+
+    def record_packet(self, packet: dict):
+        """
+        Appends a new packet to the dataset on disk.
+
+        Args:
+            packet (dict): Data packet as provided by Streamer type objects.
+        """
+
+        # TODO multiple queues? im1, im2, im3 and data
+
+        self.packets_pipe_send.send(packet)
 
 
 class Player:
