@@ -12,9 +12,9 @@ import json
 import numpy as np
 
 from streamer import SharedMemStreamer
-from recording.recorder import Recorder, Player
-from compression.decompressor import Decompressor, JITDecompressor
-from compression.compressor import Compressor
+from recording.recorder import Recorder, ThreadedRecorder, Player, PipedRecorder
+from compression.compressor import JITCompressor
+from compression.decompressor import Decompressor
 
 
 class StreamThread(QThread):
@@ -49,77 +49,93 @@ class StreamThread(QThread):
 
     def run(self):
 
-        streamer = SharedMemStreamer()
+        # streamer = SharedMemStreamer()
         # TODO give it a warmup period?
-        source_stream = streamer.stream_generator()
+        # source_stream = streamer.stream_generator()
 
-        compressed_source_stream = Compressor(source_stream).compressed_generator()
+        with Player("./saved_datasets/recording_1") as p:
 
-        with Recorder(out_path=self.rec_path) as r:
+            source_stream = Decompressor(p.stream_generator(loop=True)).uncompressed_generator()
 
-            telemetry_delay = self.telemetry_delay_frames + 1
-            multiple_delay_ms = []
+            with PipedRecorder(out_path=self.rec_path) as r:
 
-            last_time = time.time()
+                telemetry_delay = self.telemetry_delay_frames + 1
+                multiple_delay_ms = []
 
-            jit_decompressor = JITDecompressor()
-
-            while self._is_running:
-
-                recv_obj = next(compressed_source_stream)
-
-                r.record_packet(recv_obj)
-
-                # show telemetry to user
-
-                recv_obj = jit_decompressor.decompress_next_packet(recv_obj)
-
-                for pos in recv_obj["images"].keys():
-                    recv_obj["images"][pos] = cv2.resize(recv_obj["images"][pos],
-                                                         (int(recv_obj["images"][pos].shape[1] / 2.8),
-                                                          int(recv_obj["images"][pos].shape[0] / 2.8)))
-
-                # TODO always check key exists!!! also in streamer
-                try:
-                    self.signal_change_pixmap_left.emit(self.img_ocv_to_qt(recv_obj["images"]["left"]))
-                except:
-                    pass
-
-                try:
-                    self.signal_change_pixmap_center.emit(self.img_ocv_to_qt(recv_obj["images"]["center"]))
-                except:
-                    pass
-
-                try:
-                    self.signal_change_pixmap_right.emit(self.img_ocv_to_qt(recv_obj["images"]["right"]))
-                except:
-                    pass
-
-                delay = time.time() - last_time
                 last_time = time.time()
 
-                multiple_delay_ms.append(delay * 1000)
+                jit_compressor = JITCompressor()
 
-                try:
-                    self.signal_imu.emit(recv_obj["sensor_data"]["imu"])
-                except:
-                    pass
+                debug_time = time.time()
 
-                try:
-                    self.signal_telemetry_text.emit(json.dumps(recv_obj["sensor_data"], indent=4))
-                except:
-                    pass
+                while self._is_running:
 
-                if telemetry_delay > self.telemetry_delay_frames:
+                    recv_obj = next(source_stream)
 
-                    telemetry_delay = 0
+                    print("delay_recv = ", time.time() - debug_time)
+                    debug_time = time.time()
 
-                    avg_delay_ms = statistics.mean(multiple_delay_ms)
-                    multiple_delay_ms.clear()
-                    self.signal_fps.emit(int(1/avg_delay_ms * 1000))
-                    self.signal_ms.emit(int(avg_delay_ms))
-                else:
-                    telemetry_delay += 1
+                    compressed = jit_compressor.compress_next_packet(recv_obj) # TODO compress inside the recorder, decompress inside the player, with threads
+
+                    print("delay_compress = ", time.time() - debug_time)
+                    debug_time = time.time()
+
+                    r.record_packet(compressed)
+
+                    print("delay_to_disk = ", time.time() - debug_time)
+                    debug_time = time.time()
+
+                    # show telemetry to user
+
+                    for pos in recv_obj["images"].keys():
+                        recv_obj["images"][pos] = cv2.resize(recv_obj["images"][pos],
+                                                             (int(recv_obj["images"][pos].shape[1] / 2.8),
+                                                              int(recv_obj["images"][pos].shape[0] / 2.8)))
+
+                    # TODO always check key exists!!! also in streamer
+                    try:
+                        self.signal_change_pixmap_left.emit(self.img_ocv_to_qt(recv_obj["images"]["left"]))
+                    except:
+                        pass
+
+                    try:
+                        self.signal_change_pixmap_center.emit(self.img_ocv_to_qt(recv_obj["images"]["center"]))
+                    except:
+                        pass
+
+                    try:
+                        self.signal_change_pixmap_right.emit(self.img_ocv_to_qt(recv_obj["images"]["right"]))
+                    except:
+                        pass
+
+                    delay = time.time() - last_time
+                    last_time = time.time()
+
+                    multiple_delay_ms.append(delay * 1000)
+
+                    try:
+                        self.signal_imu.emit(recv_obj["sensor_data"]["imu"])
+                    except:
+                        pass
+
+                    try:
+                        self.signal_telemetry_text.emit(json.dumps(recv_obj["sensor_data"], indent=4))
+                    except:
+                        pass
+
+                    if telemetry_delay > self.telemetry_delay_frames:
+
+                        telemetry_delay = 0
+
+                        avg_delay_ms = statistics.mean(multiple_delay_ms)
+                        multiple_delay_ms.clear()
+                        self.signal_fps.emit(int(1/avg_delay_ms * 1000))
+                        self.signal_ms.emit(int(avg_delay_ms))
+                    else:
+                        telemetry_delay += 1
+
+                    print("delay_gui = ", time.time() - debug_time)
+                    debug_time = time.time()
 
     def stop(self):
         self._is_running = False
