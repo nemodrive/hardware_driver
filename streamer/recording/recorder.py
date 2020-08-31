@@ -665,6 +665,8 @@ class FastRecorder:
         for video_writer in open_videos.values():
             video_writer.close()
 
+        print("Recorder thread has closed all open files!")
+
     def start(self):
         """
         Opens the video files and makes sure the Recorder is ready to receive data packets.
@@ -734,7 +736,7 @@ class FastCompressedRecorder:
 
         manager = Manager()
 
-        self.packets_queue = faster_fifo.Queue(100000 * 1000)
+        self.packets_queue = faster_fifo.Queue(1024 ** 3)  # 1 GB buffer
         self._worker_running = manager.Event()
 
         self.worker = Process(target=self._recorder_thread,
