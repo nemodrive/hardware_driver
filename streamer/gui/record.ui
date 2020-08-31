@@ -257,8 +257,8 @@
         <rect>
          <x>0</x>
          <y>0</y>
-         <width>1397</width>
-         <height>1143</height>
+         <width>1408</width>
+         <height>1136</height>
         </rect>
        </property>
        <property name="sizePolicy">
@@ -336,13 +336,6 @@
       </widget>
      </widget>
     </item>
-    <item>
-     <widget class="QPushButton" name="pushButtonRec">
-      <property name="text">
-       <string>Record</string>
-      </property>
-     </widget>
-    </item>
    </layout>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -351,7 +344,7 @@
      <x>0</x>
      <y>0</y>
      <width>1442</width>
-     <height>26</height>
+     <height>19</height>
     </rect>
    </property>
   </widget>

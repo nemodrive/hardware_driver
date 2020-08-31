@@ -130,5 +130,6 @@ class JITCompressor:
             self.last_packet = deepcopy(source_packet)
             return source_packet
         else:
+            source_packet = deepcopy(source_packet)
             self._prune_dict(self.last_packet, source_packet)
             return source_packet
