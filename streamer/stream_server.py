@@ -28,6 +28,8 @@ def main():
 
     with ThreadedBroadcastServer(settings["host"], settings["port"], settings["header_size"]) as server:
 
+        input("Press Enter to begin ...")
+
         for data_packet in streamer.stream_generator():
 
             if not server_running:
@@ -37,7 +39,9 @@ def main():
 
             server.send_object(data_packet)
             print(data_packet)
-            input("Press Enter to continue ...")
+
+        server.close()
+
 
 
 if __name__ == '__main__':
