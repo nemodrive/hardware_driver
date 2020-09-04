@@ -10,7 +10,11 @@
         <!--<remap from="imu/mag" to="test/magnet"/>-->
     <!--</node>-->
 
+
+
+
     <!-- https://github.com/methylDragon/ros-sensor-fusion-tutorial/blob/master/01%20-%20ROS%20and%20Sensor%20Fusion%20Tutorial.md -->
+
 
     <!-- ============= Static transforms from sensor frames to base_link =============  -->
     <!-- TODO: set actual relative position for IMU sensor from PRIME measurements -->
@@ -21,8 +25,11 @@
 
     <!-- ============= IMU Quaternion to Euler Angles transform -->
     <node name="imu_euler_transform" pkg="topic_tools" type="transform"
-          args="/nemo_imu/orientation /nemo_imu_euler sensor_msgs/Imu 'm'">
+          args="/nemo_imu /nemo_imu_euler sensor_msgs/Imu 'm'">
     </node>
+    <!--<node name="imu_euler_relay" pkg="topic_tools" type="relay"-->
+          <!--args="/nemo_imu /nemo_imu_euler">-->
+    <!--</node>-->
 
     <!-- ============= Local state robot_localization EKF node =============  -->
     <node name="ekf_local" pkg="robot_localization" type="ekf_localization_node" clear_params="true">
@@ -72,17 +79,22 @@
         <param name="imu1_queue_size" value="5"/>
 
 
-        <param name="odom0_differential" value="false"/>
-        <param name="imu0_differential" value="false"/>
-        <param name="imu1_differential" value="false"/>
-
+        <!--<param name="odom0_differential" value="false"/>-->
+        <!--<param name="imu0_differential" value="false"/>-->
+        <!--<param name="imu1_differential" value="false"/>-->
         <param name="odom0_relative" value="true"/>
         <param name="imu0_relative" value="true"/>
         <param name="imu1_relative" value="true"/>
 
+        <param name="odom0_relative" value="false"/>
+        <param name="imu0_relative" value="false"/>
+        <param name="imu1_relative" value="false"/>
+
 
         <param name="imu0_remove_gravitational_acceleration" value="false"/>
         <param name="imu1_remove_gravitational_acceleration" value="false"/>
+        <!--<param name="imu0_remove_gravitational_acceleration" value="true"/>-->
+        <!--<param name="imu1_remove_gravitational_acceleration" value="true"/>-->
 
         <!--<rosparam param="initial_state">[5.0,  4.0,  3.0,-->
                                  <!--0.0,  0.0,  1.57,-->
@@ -101,7 +113,7 @@
         <!--<param name="debug" value="false"/>-->
         <!--<param name="debug_out_file" value="debug_ekf_local.txt"/>-->
 
-        <rosparam param="process_noise_covariance">[0.5, 0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
+         <rosparam param="process_noise_covariance">[0.5, 0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
                                                       0,     0.5, 0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
                                                       0,     0,    0.5, 0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
                                                       0,     0,    0,    0.05, 0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
@@ -137,13 +149,16 @@
     
         <param name="dynamic_process_noise_covariance" value="true" />
 
+        <!--<param name="disabled_at_startup" value="true" />-->
+
         <remap from="/odometry/filtered" to="/odometry/filtered/local"/>
     </node>
 
     <!-- ================= Nodes for GPS information fusion ==================  -->
     <node name="nmea_converter" pkg="nmea_navsat_driver"
           type="nmea_topic_driver" respawn="true">
-        <param name="subscribed_topic" value="/nemo_nmea_sentence"/>
+        <!--<param name="subscribed_topic" value="/nemo_nmea_sentence"/>-->
+        <remap from="/nmea_sentence" to="/nemo_nmea_sentence"/>
     </node>
 
     <node name="navsat_transform" pkg="robot_localization" type="navsat_transform_node" respawn="true">
@@ -242,10 +257,18 @@
         <param name="odom1_relative" value="true"/>
         <param name="imu0_relative" value="true"/>
         <param name="imu1_relative" value="true"/>
+        <!--<param name="odom0_relative" value="false"/>-->
+        <!--<param name="odom1_relative" value="false"/>-->
+        <!--<param name="imu0_relative" value="false"/>-->
+        <!--<param name="imu1_relative" value="false"/>-->
+
 
 
         <param name="imu0_remove_gravitational_acceleration" value="false"/>
         <param name="imu1_remove_gravitational_acceleration" value="false"/>
+        <!--<param name="imu0_remove_gravitational_acceleration" value="true"/>-->
+        <!--<param name="imu1_remove_gravitational_acceleration" value="true"/>-->
+
 
         <!--<rosparam param="initial_state">[5.0,  4.0,  3.0,-->
                                  <!--0.0,  0.0,  1.57,-->
@@ -300,7 +323,14 @@
 
         <param name="dynamic_process_noise_covariance" value="true" />
 
+        <!--<param name="disabled_at_startup" value="true" />-->
+
         <remap from="/odometry/filtered" to="/odometry/filtered/global"/>
     </node>
+
+
+    <!-- Add a rosbag instance that collects the output of /odometry/filtered/global, /gps/filtered, /fix -->
+
+    <node pkg="rosbag" type="record" name="record" output="screen" args="-O nemo_fusion /fix /gps/filtered"/>
 
 </launch>

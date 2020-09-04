@@ -21,7 +21,7 @@
 import json
 import math
 import pynmea2
-from copy import deepcopy
+from datetime import datetime
 
 LOGFILE_PATH = "../../car_data_collection/data/sesiune-18-11-2018/671a87f4eb424ab6.json"
 
@@ -81,13 +81,20 @@ class SimulatedStreamer:
         stream = []
 
         ts_speed_idx = 0
-        ts_rest_idx = 0
+        ts_idx = 0
+
+        current_ts_rest = self.log_data[TIMESTAMPS][ts_idx]
+        current_ts_speed = self.log_data[SPEED_TS][ts_speed_idx]
+
+        send_first_speed = False
+        if current_ts_speed <= current_ts_rest:
+            send_first_speed = True
+
+        current_ts = current_ts_rest
 
         while True:
             current_ts_speed = self.log_data[SPEED_TS][ts_speed_idx]
-            current_ts_rest = self.log_data[TIMESTAMPS][ts_rest_idx]
 
-            current_ts = min(current_ts_speed, current_ts_rest)
             packet = {
                 "images": {},
                 "sensor_data": {},
@@ -97,15 +104,17 @@ class SimulatedStreamer:
             """=========== set data ==========="""
             # set IMU data
             packet["sensor_data"]["imu"] = {
-                "orientation_quaternion": self.log_data[IMU_ORIENTATIONS][ts_rest_idx],
-                "gyro_rate": self.log_data[IMU_ROT_RATES][ts_rest_idx],
-                "linear_acceleration": self.log_data[IMU_LIN_ACCS][ts_rest_idx],
+                "orientation_quaternion": self.log_data[IMU_ORIENTATIONS][ts_idx],
+                "gyro_rate": self.log_data[IMU_ROT_RATES][ts_idx],
+                "linear_acceleration": self.log_data[IMU_LIN_ACCS][ts_idx],
             }
             #print(packet["sensor_data"]["imu"])
 
             # set GPS data
-            lat_sign, lat_deg, lat_min, lat_sec = dd_to_dms(self.log_data[GPS_LAT][ts_rest_idx])
-            long_sign, long_deg, long_min, long_sec = dd_to_dms(self.log_data[GPS_LAT][ts_rest_idx])
+            gps_time = datetime.utcfromtimestamp(current_ts).strftime('%H%M%S.%f')[:-4]
+
+            lat_sign, lat_deg, lat_min, lat_sec = dd_to_dms(self.log_data[GPS_LAT][ts_idx])
+            long_sign, long_deg, long_min, long_sec = dd_to_dms(self.log_data[GPS_LONG][ts_idx])
 
             lat_repr = "%03d%07.4f" % (lat_deg, lat_min + lat_sec / 60.0)
             long_repr = "%03d%07.4f" % (long_deg, long_min + long_sec / 60.0)
@@ -119,48 +128,69 @@ class SimulatedStreamer:
 
             packet["sensor_data"]["gps"] = {
                 "GGA": {
-                    "msg": pynmea2.GGA('GP', 'GGA', (str(current_ts), lat_repr, lat_direction, long_repr, long_direction,
-                                                 '1', '04', '2.6', "%f" % self.log_data[GPS_ALT][ts_rest_idx],
+                    "msg": pynmea2.GGA('GP', 'GGA', (gps_time, lat_repr, lat_direction, long_repr, long_direction,
+                                                 '1', '04', '2.6', "%f" % self.log_data[GPS_ALT][ts_idx],
                                                  'M', '35.8953', 'M', '', '0000')),
                     "timestamp": current_ts
                 }
             }
 
             # set speed data
-            packet["sensor_data"]["speed"] = {
-                "mps": self.log_data[SPEED_MPS][ts_speed_idx]
-            }
+            if send_first_speed:
+                packet["sensor_data"]["speed"] = {
+                    "mps": self.log_data[SPEED_MPS][ts_speed_idx]
+                }
+                send_first_speed = False
+            else:
+                if current_ts >= current_ts_speed and ts_speed_idx <= len(self.log_data[SPEED_TS]) - 1:
+                    # if the IMU timestamps have caught up with the next speed ts, then send the speed and
+                    # update the current speed ts
+                    packet["sensor_data"]["speed"] = {
+                        "mps": self.log_data[SPEED_MPS][ts_speed_idx]
+                    }
+
+                    ts_speed_idx += 1
+
             """=========== done set data ==========="""
 
+            # add packet to stream
             stream.append(packet)
 
-            # increment simulated speed and GPS/IMU indexes, such that if speed readings are slower, the
-            # same speed will be input with the next inertial package
-            if ts_speed_idx == len(self.log_data[SPEED_TS]) - 1:
-                if ts_rest_idx == len(self.log_data[TIMESTAMPS]) - 1:
-                    # we have consumed all the data from the log, so we can return the resulting packet list
-                    break
-                else:
-                    # keep reading inertial logs until the end
-                    ts_rest_idx += 1
-            else:
-                if ts_rest_idx == len(self.log_data[TIMESTAMPS]) - 1:
-                    # if the phone logs have finished but there are remaining speed readings, ignore them
-                    break
-                else:
-                    # if both speed and inertial measurements remain
-                    next_speed_ts = self.log_data[SPEED_TS][ts_speed_idx + 1]
-                    next_rest_ts = self.log_data[TIMESTAMPS][ts_rest_idx + 1]
+            # progress timestamp index
+            ts_idx += 1
 
-                    if next_rest_ts <= current_ts_speed:
-                        ts_rest_idx += 1
-                    elif next_rest_ts <= next_speed_ts:
-                        ts_rest_idx += 1
-                    else:
-                        ts_speed_idx += 1
-                        ts_rest_idx += 1
+            # check for termination
+            if ts_idx == len(self.log_data[TIMESTAMPS]) - 1:
+                break
+
+            # # increment simulated speed and GPS/IMU indexes, such that if speed readings are slower, the
+            # # same speed will be input with the next inertial package
+            # if ts_speed_idx == len(self.log_data[SPEED_TS]) - 1:
+            #     if ts_idx == len(self.log_data[TIMESTAMPS]) - 1:
+            #         # we have consumed all the data from the log, so we can return the resulting packet list
+            #         break
+            #     else:
+            #         # keep reading inertial logs until the end
+            #         ts_idx += 1
+            # else:
+            #     if ts_idx == len(self.log_data[TIMESTAMPS]) - 1:
+            #         # if the phone logs have finished but there are remaining speed readings, ignore them
+            #         break
+            #     else:
+            #         # if both speed and inertial measurements remain
+            #         next_speed_ts = self.log_data[SPEED_TS][ts_speed_idx + 1]
+            #         next_rest_ts = self.log_data[TIMESTAMPS][ts_idx + 1]
+            #
+            #         if next_rest_ts <= current_ts_speed:
+            #             ts_idx += 1
+            #         elif next_rest_ts <= next_speed_ts:
+            #             ts_idx += 1
+            #         else:
+            #             ts_speed_idx += 1
+            #             ts_idx += 1
 
         return stream
+
 
 if __name__ == "__main__":
     sim_streamer = SimulatedStreamer()
