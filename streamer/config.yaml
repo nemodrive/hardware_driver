@@ -3,6 +3,7 @@ enabled_features:
   video_undistort: False
   gps: False
   imu: True
+  speed: False
   monitoring_panel: True
 
 #camera_serial_numbers:

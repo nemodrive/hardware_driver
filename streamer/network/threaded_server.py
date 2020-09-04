@@ -59,7 +59,7 @@ class ThreadedBroadcastServer:
         except socket.error as e:
             logging.error(e)
 
-        logging.info('Server started, waiting for clients...')
+        logging.debug('Server started, waiting for clients...')
         main_socket.listen(5)
 
         child_workers = []
@@ -67,7 +67,7 @@ class ThreadedBroadcastServer:
         while running.is_set():
             try:
                 client_socket, client_address = main_socket.accept()  # this is why it will not join
-                logging.info('Connection request from: %s:%d' % (client_address[0], client_address[1]))
+                logging.debug('Connection request from: %s:%d' % (client_address[0], client_address[1]))
 
                 is_running = manager.Event()
                 is_running.set()
@@ -82,7 +82,7 @@ class ThreadedBroadcastServer:
             except socket.timeout:
                 continue
 
-        logging.info("Stopping client threads...")
+        logging.debug("Stopping client threads...")
 
         for _, is_running in child_workers:
             is_running.clear()
@@ -111,7 +111,7 @@ class ThreadedBroadcastServer:
             try:
                 destination_socket.sendall(crt_packet)
             except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
-                logging.info("Client at %s:%d has aborted connection, removing from queue" % client_address)
+                logging.debug("Client at %s:%d has aborted connection, removing from queue" % client_address)
                 is_running.clear()
             except Exception as e:
                 logging.error(type(e))

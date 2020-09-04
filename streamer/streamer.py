@@ -8,6 +8,7 @@ from typing import Dict
 
 import libs.yei3.threespace_api as ts_api
 from providers.gps_provider import GPSProvider
+from providers.speed_provider import SpeedProvider, SpeedData
 from providers.camera_provider import CameraSharedMemProvider
 
 
@@ -72,6 +73,11 @@ class SharedMemStreamer:
                 # TODO try a streaming session with a worker process similar to gps and compare performance
 
             # TODO imu_device.close() when finished
+
+        # setup CAN SPEED
+        if self.settings["enabled_features"]["speed"]:
+            self.speed_provider = SpeedProvider(can_device=self.settings["can_device"],
+                                                dbc_file=self.settings["can_dbc_file"])
 
     def get_imu_device(self) -> ts_api.ComInfo:
         """Gets a reference to the YEI 3 sensor"""
@@ -159,5 +165,15 @@ class SharedMemStreamer:
                         "msg": str(msg_value),
                         "timestamp": msg_value.timestamp
                     }
+
+            if self.settings["enabled_features"]["speed"]:
+                speed_msgs = self.speed_provider.get_latest_messages()
+                return_packet["sensor_data"]["speed"] = {}
+
+                if speed_msgs:
+                    # always select just the most recent speed recording - i.e. we implicitly drop unused messages
+                    speed_msg = speed_msg[-1] # since we have a queue, the last message will be the most recent one
+                    return_packet["sensor_data"]["speed"]["mps"] = speed_msg.speed
+                    return_packet["sensor_data"]["speed"]["timestamp"] = speed_msg.timestamp
 
             yield return_packet
