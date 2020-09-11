@@ -52,7 +52,7 @@ def publisher():
             header = message[:HEADER_SIZE]
             message = message[HEADER_SIZE:]
 
-            # print("new msg len:", header)
+            print("new msg len:", header)
             message_len = int(header)
 
             while len(message) < message_len:

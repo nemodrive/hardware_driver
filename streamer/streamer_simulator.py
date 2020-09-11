@@ -1,27 +1,8 @@
-# TODO:
-#  - parse JSON file: 671a87f4eb424ab6.json
-#  - timestamps: phone_data -> tp
-#  - IMU
-#    - orientation quaternion: phone_data -> attitude
-#    - gyro rate: phone_data -> rotationRate (rotationRateUnbiased??)
-#    - linear acceleration: phone_data -> acceleration ( + phone_data -> gravity??) (phone_data -> userAcceleration??)
-#    -
-#  - GPS
-#    - longitute (x) : phone_data -> longitude
-#    - latitude (y) : phone_data -> latitude
-#    - altitude (z) : phone_data -> altitude
-#    - easting : phone_data -> easting
-#    - northing : phone_data -> northing
-#    -
-#  - SPEED
-#    - mps (meters per second): speed_data -> mps
-#    - timestamps: speed_data -> tp
-#    - orientation: phone_data -> trueHeading??, IMU (orientation quaternion)
-
 import json
 import math
 import pynmea2
 from datetime import datetime
+import time
 
 LOGFILE_PATH = "../../car_data_collection/data/sesiune-18-11-2018/671a87f4eb424ab6.json"
 
@@ -77,23 +58,22 @@ class SimulatedStreamer:
 
             return log_data
 
-    def stream_generator(self):
-        stream = []
-
+    def stream_generator(self, time_delayed: bool = False, simulator_delay: float = None):
         ts_speed_idx = 0
         ts_idx = 0
 
-        current_ts_rest = self.log_data[TIMESTAMPS][ts_idx]
+        current_ts = self.log_data[TIMESTAMPS][ts_idx]
         current_ts_speed = self.log_data[SPEED_TS][ts_speed_idx]
 
         send_first_speed = False
-        if current_ts_speed <= current_ts_rest:
+        if current_ts_speed <= current_ts:
             send_first_speed = True
 
-        current_ts = current_ts_rest
+        stream_end = False
 
-        while True:
+        while not stream_end:
             current_ts_speed = self.log_data[SPEED_TS][ts_speed_idx]
+            current_ts = self.log_data[TIMESTAMPS][ts_idx]
 
             packet = {
                 "images": {},
@@ -152,16 +132,27 @@ class SimulatedStreamer:
                     ts_speed_idx += 1
 
             """=========== done set data ==========="""
-
-            # add packet to stream
-            stream.append(packet)
-
-            # progress timestamp index
-            ts_idx += 1
-
             # check for termination
             if ts_idx == len(self.log_data[TIMESTAMPS]) - 1:
-                break
+                stream_end = True
+            else:
+                if not time_delayed:
+                    # progress timestamp index
+                    ts_idx += 1
+
+                    yield packet
+                else:
+                    if ts_idx < len(self.log_data[TIMESTAMPS]) - 1:
+                        if simulator_delay is None:
+                            next_ts = self.log_data[TIMESTAMPS][ts_idx + 1]
+                            delta_ts_millis = (next_ts - current_ts)
+                            time.sleep(delta_ts_millis)
+                        else:
+                            time.sleep(simulator_delay)
+
+                        ts_idx += 1
+
+                        yield packet
 
             # # increment simulated speed and GPS/IMU indexes, such that if speed readings are slower, the
             # # same speed will be input with the next inertial package
@@ -188,8 +179,6 @@ class SimulatedStreamer:
             #         else:
             #             ts_speed_idx += 1
             #             ts_idx += 1
-
-        return stream
 
 
 if __name__ == "__main__":
