@@ -29,5 +29,7 @@ can_dbc_file: logan.dbc
 network_streaming:
   host: 0.0.0.0
   port: 6366
+  sync_manager_host: 0.0.0.0
+  sync_manager_port: 8986
   header_size: 10
   recv_buffer: 104857600
