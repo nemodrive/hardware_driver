@@ -11,6 +11,7 @@ import cv2  # TODO test dual backend using scikit video?
 from player import DatasetPlayer
 from compression.compressor import Compressor, JITCompressor
 from compression.decompressor import Decompressor, JITDecompressor
+from streamer import SharedMemStreamer
 
 import faster_fifo
 
@@ -704,6 +705,131 @@ class FastRecorder:
         self.packets_queue.put(packet)
 
 
+class FastSeparateRecorder:
+    """
+    Takes in a car data generator such as the one in the Streamer class and records its output to disk for later use.
+    Images will be saved in a separate video file for each camera POV.
+    The rest of the data will be appended to a binary file using pickle.
+    The first object in the file is a dict which specifies the names of the video files for each camera.
+    Subsequent calls to pickle.load() will return the data packets.
+    If packets contain images they will specify for each camera an index of a frame,
+     which has to be extracted from the appropriate video file.
+    """
+
+    def __init__(self, out_path: Optional[str] = "./test_recording/"):
+        """
+        Instantiates the Recorder with the details of the dataset that will be recorded.
+        To be ready for recording start() needs to be called.
+        This is done automatically if the Recorder is called within a Python "with" statement.
+
+        Args:
+            out_path (Optional[str]): Directory where the dataset will be saved on disk
+        """
+
+        self.out_path = out_path
+
+        # load settings from configuration file
+        with open(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config.yaml")), "r") as f:
+            self.settings = yaml.load(f, Loader=yaml.SafeLoader)
+
+        self.enabled_positions = list(self.settings["camera_ids"].keys())
+        self.resolution = (self.settings["video_resolution"]["width"], self.settings["video_resolution"]["height"])
+
+        self.open_videos = {}
+
+        for pos in self.enabled_positions:
+            path = os.path.join(out_path, f"{pos}.mp4")
+            self.open_videos[pos] = VideoWriteBuffer(path, self.resolution)
+
+        video_paths = {}
+
+        for pos, video_writer in self.open_videos.items():
+            video_paths[pos] = os.path.basename(video_writer.path)
+
+        manager = Manager()
+
+        self.packets_queue = faster_fifo.Queue(100000 * 1000)
+        self._worker_running = manager.Event()
+
+        self.worker = Process(target=self._recorder_thread,
+                                args=(self.out_path, self.packets_queue, video_paths, self._worker_running))
+
+    def _recorder_thread(self, out_path: str, packets_queue: faster_fifo.Queue, video_paths: dict, running: Event):
+
+        if not os.path.exists(out_path):
+            os.makedirs(out_path)
+
+        metadata_file = open(os.path.join(out_path, "metadata.pkl"), "wb")
+
+        pickle.dump(video_paths, metadata_file)
+
+        while running.is_set():
+            # TODO
+
+            packet = packets_queue.get()
+
+            pickle.dump(packet, metadata_file)
+
+        metadata_file.close()
+
+        print("Recorder thread has closed all open files!")
+
+    def start(self):
+        """
+        Opens the video files and makes sure the Recorder is ready to receive data packets.
+        Is called automatically by __enter__() if the Recorder is called within a Python "with" statement.
+        """
+
+        self._worker_running.set()
+        self.worker.start()
+
+    def close(self):
+        """Closes video and metadata files and cleans all used resources."""
+
+        for video_writer in self.open_videos.values():
+            video_writer.close()
+
+        print("closed video writers")
+
+        self._worker_running.clear()
+        self.worker.join()
+
+    def __enter__(self):
+        """This allows the Recorder to be (optionally) used in Python 'with' statements"""
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """This allows the Recorder to be (optionally) used in Python 'with' statements"""
+        self.close()
+
+    def record_packet(self, packet: dict):
+        """
+        Appends a new packet to the dataset on disk.
+
+        Args:
+            packet (dict): Data packet as provided by Streamer type objects.
+        """
+
+        # TODO multiple queues? im1, im2, im3 and data
+
+        packet = deepcopy(packet)  # making sure no one edits it later
+
+        if "images" in packet.keys():
+            images = packet["images"]
+            saved_images = {}
+
+            for pos, img in images.items():
+                frame_index = self.open_videos[pos].write_frame(img)
+                saved_images[pos] = frame_index
+
+            packet["images"] = saved_images
+
+        # print(packet["images"])
+
+        self.packets_queue.put(packet)
+
+
 class FastCompressedRecorder:
     """
     Takes in a car data generator such as the one in the Streamer class and records its output to disk for later use.
@@ -832,31 +958,23 @@ class FastCompressedRecorder:
 
 if __name__ == '__main__':
 
-    raw_generator = DatasetPlayer("../saved_datasets/dataset_shake.json").stream_generator(loop=False)
+    streamer = SharedMemStreamer()
+    # TODO give it a warmup period?
+    source_stream = streamer.stream_generator()
 
-    compressed_generator = Compressor(raw_generator).compressed_generator()
+    # with Player("./saved_datasets/recording_test") as p:
+    #
+    #     source_stream = Decompressor(p.stream_generator(loop=True)).uncompressed_generator()
 
-    with Recorder(compressed_generator) as r:
+    with FastSeparateRecorder(out_path="./saved_datasets/asjhdajhsdjhasd") as r:
 
-        # for i in range(100):
-        #     r.record_packet(next(raw_generator))
+        jit_compressor = JITCompressor()
 
-        for p in compressed_generator:
-            r.record_packet(p)
+        for i in range(100):
 
-    with Player() as p:
+            recv_obj = next(source_stream)
 
-        uncomp_generator = Decompressor(p.stream_generator(True)).uncompressed_generator()
+            compressed = jit_compressor.compress_next_packet(
+                recv_obj)  # TODO compress inside the recorder, decompress inside the player, with threads
 
-        for packet in uncomp_generator:
-
-            # print(sorted(packet["sensor_data"]["gps"], key=lambda x: x.lower()))
-            # print(packet["datetime"])
-            print(packet["sensor_data"]["imu"])
-
-            if "images" in packet:
-                for pos, img in packet["images"].items():
-
-                    img = cv2.resize(img, (int(img.shape[1] / 2), int(img.shape[0] / 2)))
-                    cv2.imshow(pos, img)
-                    cv2.waitKey(1)
+            r.record_packet(compressed)
