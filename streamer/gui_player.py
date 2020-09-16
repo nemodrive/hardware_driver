@@ -60,6 +60,8 @@ class StreamThread(QThread):
 
             debug_time = time.time()
 
+            previous_packet_datetime = None
+
             while self._is_running:
 
                 recv_obj = next(source_stream)
@@ -67,8 +69,17 @@ class StreamThread(QThread):
                 print("delay_recv = ", time.time() - debug_time)
                 debug_time = time.time()
 
-                # show telemetry to user
+                # simulate delay
 
+                if previous_packet_datetime is None:
+                    previous_packet_datetime = recv_obj['datetime']
+                else:
+                    required_delay = (recv_obj['datetime'] - previous_packet_datetime).total_seconds()
+                    previous_packet_datetime = recv_obj['datetime']
+
+                    time.sleep(required_delay)
+
+                # show telemetry to user
 
                 for pos in recv_obj["images"].keys():
                     recv_obj["images"][pos] = cv2.resize(recv_obj["images"][pos],
