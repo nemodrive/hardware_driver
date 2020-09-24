@@ -28,12 +28,13 @@ if __name__ == '__main__':
 
         print(fps)
 
+
         # print(packet["images"].keys())
 
         cv2.imshow("center", packet["images"]["center"])
         # cv2.imshow("left", packet["images"]["left"])
         # cv2.imshow("right", packet["images"]["right"])
-        cv2.waitKey(1)
+        cv2.waitKey(0)
         # cv2.destroyAllWindows()
 
         # for pos, image in packet["images"].items():

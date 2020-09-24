@@ -1,5 +1,6 @@
-from typing import Iterator, Optional, Tuple
+from typing import Iterator, Optional, Tuple, List
 from copy import deepcopy
+from multiprocessing import Process, Manager, Queue, Event, Pipe, connection
 import os
 
 import numpy as np
@@ -8,8 +9,11 @@ import yaml
 import cv2  # TODO test dual backend using scikit video?
 
 from player import DatasetPlayer
-from compression.compressor import Compressor
-from compression.decompressor import Decompressor
+from compression.compressor import Compressor, JITCompressor
+from compression.decompressor import Decompressor, JITDecompressor
+from streamer import SharedMemStreamer
+
+import faster_fifo
 
 
 class VideoWriteBuffer:
@@ -28,11 +32,12 @@ class VideoWriteBuffer:
         self.path = path
         self.resolution = resolution
 
-        # self._fourcc = cv2.VideoWriter_fourcc(*'H264')
-        # self._video_writer = cv2.VideoWriter(self.path, self._fourcc, 60.0, self.resolution)
-
-        self._fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        self._fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         self._video_writer = cv2.VideoWriter(self.path, self._fourcc, 100.0, self.resolution)
+
+        # self._fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        # self._video_writer = cv2.VideoWriter(self.path, self._fourcc, 100.0, self.resolution)
+
 
         self._crt_frame = 0
 
@@ -198,17 +203,264 @@ class Recorder:
 
         packet = deepcopy(packet)  # making sure no one edits it later
 
-        images = packet["images"]
-        saved_images = {}
+        if "images" in packet.keys():
+            images = packet["images"]
+            saved_images = {}
 
-        for pos, img in images.items():
-            frame_index = self.open_videos[pos].write_frame(img)
-            saved_images[pos] = frame_index
+            for pos, img in images.items():
+                frame_index = self.open_videos[pos].write_frame(img)
+                saved_images[pos] = frame_index
 
-        new_packet = deepcopy(packet)
-        new_packet["images"] = saved_images
+            new_packet = deepcopy(packet)
+            new_packet["images"] = saved_images
+        else:
+            new_packet = deepcopy(packet)
 
         pickle.dump(new_packet, self.metadata_file)
+
+
+class ThreadedRecorder:
+    """
+    Takes in a car data generator such as the one in the Streamer class and records its output to disk for later use.
+    Images will be saved in a separate video file for each camera POV.
+    The rest of the data will be appended to a binary file using pickle.
+    The first object in the file is a dict which specifies the names of the video files for each camera.
+    Subsequent calls to pickle.load() will return the data packets.
+    If packets contain images they will specify for each camera an index of a frame,
+     which has to be extracted from the appropriate video file.
+    """
+
+    def __init__(self, out_path: Optional[str] = "./test_recording/"):
+        """
+        Instantiates the Recorder with the details of the dataset that will be recorded.
+        To be ready for recording start() needs to be called.
+        This is done automatically if the Recorder is called within a Python "with" statement.
+
+        Args:
+            out_path (Optional[str]): Directory where the dataset will be saved on disk
+        """
+
+        self.out_path = out_path
+
+        # load settings from configuration file
+        with open(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config.yaml")), "r") as f:
+            self.settings = yaml.load(f, Loader=yaml.SafeLoader)
+
+        self.enabled_positions = list(self.settings["camera_ids"].keys())
+        self.resolution = (self.settings["video_resolution"]["width"], self.settings["video_resolution"]["height"])
+
+        manager = Manager()
+
+        self.packets_queue = manager.Queue()
+        self._worker_running = manager.Event()
+
+        self.worker = Process(target=self._recorder_thread,
+                                args=(self.out_path, self.packets_queue, self.enabled_positions, self.resolution, self._worker_running))
+
+    def _recorder_thread(self, out_path: str, packets_queue: Queue, enabled_positions: List[int], resolution: Tuple[int], running: Event):
+
+        if not os.path.exists(out_path):
+            os.makedirs(out_path)
+
+        open_videos = {}
+
+        for pos in enabled_positions:
+            path = os.path.join(out_path, f"{pos}.mp4")
+            open_videos[pos] = VideoWriteBuffer(path, resolution)
+
+        metadata_file = open(os.path.join(out_path, "metadata.pkl"), "wb")
+
+        video_paths = {}
+
+        for pos, video_writer in open_videos.items():
+            video_paths[pos] = os.path.basename(video_writer.path)
+
+        pickle.dump(video_paths, metadata_file)
+
+        while running.is_set():
+            # TODO
+
+            packet = packets_queue.get()
+
+            packet = deepcopy(packet)  # making sure no one edits it later
+
+            if "images" in packet.keys():
+                images = packet["images"]
+                saved_images = {}
+
+                for pos, img in images.items():
+                    frame_index = open_videos[pos].write_frame(img)
+                    saved_images[pos] = frame_index
+
+                new_packet = deepcopy(packet)
+                new_packet["images"] = saved_images
+            else:
+                new_packet = deepcopy(packet)
+
+            pickle.dump(new_packet, metadata_file)
+
+        metadata_file.close()
+
+        for video_writer in open_videos.values():
+            video_writer.close()
+
+    def start(self):
+        """
+        Opens the video files and makes sure the Recorder is ready to receive data packets.
+        Is called automatically by __enter__() if the Recorder is called within a Python "with" statement.
+        """
+
+        self._worker_running.set()
+        self.worker.start()
+
+    def close(self):
+        """Closes video and metadata files and cleans all used resources."""
+
+        self._worker_running.clear()
+        self.worker.join()
+
+    def __enter__(self):
+        """This allows the Recorder to be (optionally) used in Python 'with' statements"""
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """This allows the Recorder to be (optionally) used in Python 'with' statements"""
+        self.close()
+
+    def record_packet(self, packet: dict):
+        """
+        Appends a new packet to the dataset on disk.
+
+        Args:
+            packet (dict): Data packet as provided by Streamer type objects.
+        """
+
+        # TODO multiple queues? im1, im2, im3 and data
+
+        self.packets_queue.put(packet)
+
+
+class PipedRecorder:
+    """
+    Takes in a car data generator such as the one in the Streamer class and records its output to disk for later use.
+    Images will be saved in a separate video file for each camera POV.
+    The rest of the data will be appended to a binary file using pickle.
+    The first object in the file is a dict which specifies the names of the video files for each camera.
+    Subsequent calls to pickle.load() will return the data packets.
+    If packets contain images they will specify for each camera an index of a frame,
+     which has to be extracted from the appropriate video file.
+    """
+
+    def __init__(self, out_path: Optional[str] = "./test_recording/"):
+        """
+        Instantiates the Recorder with the details of the dataset that will be recorded.
+        To be ready for recording start() needs to be called.
+        This is done automatically if the Recorder is called within a Python "with" statement.
+
+        Args:
+            out_path (Optional[str]): Directory where the dataset will be saved on disk
+        """
+
+        self.out_path = out_path
+
+        # load settings from configuration file
+        with open(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config.yaml")), "r") as f:
+            self.settings = yaml.load(f, Loader=yaml.SafeLoader)
+
+        self.enabled_positions = list(self.settings["camera_ids"].keys())
+        self.resolution = (self.settings["video_resolution"]["width"], self.settings["video_resolution"]["height"])
+
+        manager = Manager()
+
+        self.packets_pipe_send, packets_pipe_recv = Pipe() #manager.Pipe()
+        self._worker_running = manager.Event()
+
+        self.worker = Process(target=self._recorder_thread,
+                                args=(self.out_path, packets_pipe_recv, self.enabled_positions, self.resolution, self._worker_running))
+
+    def _recorder_thread(self, out_path: str, packets_pipe_recv: connection.Connection, enabled_positions: List[int], resolution: Tuple[int], running: Event):
+
+        if not os.path.exists(out_path):
+            os.makedirs(out_path)
+
+        open_videos = {}
+
+        for pos in enabled_positions:
+            path = os.path.join(out_path, f"{pos}.mp4")
+            open_videos[pos] = VideoWriteBuffer(path, resolution)
+
+        metadata_file = open(os.path.join(out_path, "metadata.pkl"), "wb")
+
+        video_paths = {}
+
+        for pos, video_writer in open_videos.items():
+            video_paths[pos] = os.path.basename(video_writer.path)
+
+        pickle.dump(video_paths, metadata_file)
+
+        while running.is_set():
+            # TODO
+
+            packet_orig = packets_pipe_recv.recv()
+
+            packet = deepcopy(packet_orig)  # making sure no one edits it later
+
+            if "images" in packet.keys():
+                images = packet["images"]
+                saved_images = {}
+
+                for pos, img in images.items():
+                    frame_index = open_videos[pos].write_frame(img)
+                    saved_images[pos] = frame_index
+
+                new_packet = deepcopy(packet)
+                new_packet["images"] = saved_images
+            else:
+                new_packet = deepcopy(packet)
+
+            pickle.dump(new_packet, metadata_file)
+
+        metadata_file.close()
+
+        for video_writer in open_videos.values():
+            video_writer.close()
+
+    def start(self):
+        """
+        Opens the video files and makes sure the Recorder is ready to receive data packets.
+        Is called automatically by __enter__() if the Recorder is called within a Python "with" statement.
+        """
+
+        self._worker_running.set()
+        self.worker.start()
+
+    def close(self):
+        """Closes video and metadata files and cleans all used resources."""
+
+        self._worker_running.clear()
+        self.worker.join()
+
+    def __enter__(self):
+        """This allows the Recorder to be (optionally) used in Python 'with' statements"""
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """This allows the Recorder to be (optionally) used in Python 'with' statements"""
+        self.close()
+
+    def record_packet(self, packet: dict):
+        """
+        Appends a new packet to the dataset on disk.
+
+        Args:
+            packet (dict): Data packet as provided by Streamer type objects.
+        """
+
+        # TODO multiple queues? im1, im2, im3 and data
+
+        self.packets_pipe_send.send(packet)
 
 
 class Player:
@@ -329,33 +581,403 @@ class Player:
                 break
 
 
+class FastRecorder:
+    """
+    Takes in a car data generator such as the one in the Streamer class and records its output to disk for later use.
+    Images will be saved in a separate video file for each camera POV.
+    The rest of the data will be appended to a binary file using pickle.
+    The first object in the file is a dict which specifies the names of the video files for each camera.
+    Subsequent calls to pickle.load() will return the data packets.
+    If packets contain images they will specify for each camera an index of a frame,
+     which has to be extracted from the appropriate video file.
+    """
+
+    def __init__(self, out_path: Optional[str] = "./test_recording/"):
+        """
+        Instantiates the Recorder with the details of the dataset that will be recorded.
+        To be ready for recording start() needs to be called.
+        This is done automatically if the Recorder is called within a Python "with" statement.
+
+        Args:
+            out_path (Optional[str]): Directory where the dataset will be saved on disk
+        """
+
+        self.out_path = out_path
+
+        # load settings from configuration file
+        with open(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config.yaml")), "r") as f:
+            self.settings = yaml.load(f, Loader=yaml.SafeLoader)
+
+        self.enabled_positions = list(self.settings["camera_ids"].keys())
+        self.resolution = (self.settings["video_resolution"]["width"], self.settings["video_resolution"]["height"])
+
+        manager = Manager()
+
+        self.packets_queue = faster_fifo.Queue(100000 * 1000)
+        self._worker_running = manager.Event()
+
+        self.worker = Process(target=self._recorder_thread,
+                                args=(self.out_path, self.packets_queue, self.enabled_positions, self.resolution, self._worker_running))
+
+    def _recorder_thread(self, out_path: str, packets_queue: faster_fifo.Queue, enabled_positions: List[int], resolution: Tuple[int], running: Event):
+
+        if not os.path.exists(out_path):
+            os.makedirs(out_path)
+
+        open_videos = {}
+
+        for pos in enabled_positions:
+            path = os.path.join(out_path, f"{pos}.mp4")
+            open_videos[pos] = VideoWriteBuffer(path, resolution)
+
+        metadata_file = open(os.path.join(out_path, "metadata.pkl"), "wb")
+
+        video_paths = {}
+
+        for pos, video_writer in open_videos.items():
+            video_paths[pos] = os.path.basename(video_writer.path)
+
+        pickle.dump(video_paths, metadata_file)
+
+        while running.is_set():
+            # TODO
+
+            packet = packets_queue.get()
+
+            packet = deepcopy(packet)  # making sure no one edits it later
+
+            if "images" in packet.keys():
+                images = packet["images"]
+                saved_images = {}
+
+                for pos, img in images.items():
+                    frame_index = open_videos[pos].write_frame(img)
+                    saved_images[pos] = frame_index
+
+                new_packet = deepcopy(packet)
+                new_packet["images"] = saved_images
+            else:
+                new_packet = deepcopy(packet)
+
+            pickle.dump(new_packet, metadata_file)
+
+        metadata_file.close()
+
+        for video_writer in open_videos.values():
+            video_writer.close()
+
+        print("Recorder thread has closed all open files!")
+
+    def start(self):
+        """
+        Opens the video files and makes sure the Recorder is ready to receive data packets.
+        Is called automatically by __enter__() if the Recorder is called within a Python "with" statement.
+        """
+
+        self._worker_running.set()
+        self.worker.start()
+
+    def close(self):
+        """Closes video and metadata files and cleans all used resources."""
+
+        self._worker_running.clear()
+        self.worker.join()
+
+    def __enter__(self):
+        """This allows the Recorder to be (optionally) used in Python 'with' statements"""
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """This allows the Recorder to be (optionally) used in Python 'with' statements"""
+        self.close()
+
+    def record_packet(self, packet: dict):
+        """
+        Appends a new packet to the dataset on disk.
+
+        Args:
+            packet (dict): Data packet as provided by Streamer type objects.
+        """
+
+        # TODO multiple queues? im1, im2, im3 and data
+
+        self.packets_queue.put(packet)
+
+
+class FastSeparateRecorder:
+    """
+    Takes in a car data generator such as the one in the Streamer class and records its output to disk for later use.
+    Images will be saved in a separate video file for each camera POV.
+    The rest of the data will be appended to a binary file using pickle.
+    The first object in the file is a dict which specifies the names of the video files for each camera.
+    Subsequent calls to pickle.load() will return the data packets.
+    If packets contain images they will specify for each camera an index of a frame,
+     which has to be extracted from the appropriate video file.
+    """
+
+    def __init__(self, out_path: Optional[str] = "./test_recording/"):
+        """
+        Instantiates the Recorder with the details of the dataset that will be recorded.
+        To be ready for recording start() needs to be called.
+        This is done automatically if the Recorder is called within a Python "with" statement.
+
+        Args:
+            out_path (Optional[str]): Directory where the dataset will be saved on disk
+        """
+
+        self.out_path = out_path
+
+        # load settings from configuration file
+        with open(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config.yaml")), "r") as f:
+            self.settings = yaml.load(f, Loader=yaml.SafeLoader)
+
+        self.enabled_positions = list(self.settings["camera_ids"].keys())
+        self.resolution = (self.settings["video_resolution"]["width"], self.settings["video_resolution"]["height"])
+
+        if not os.path.exists(out_path):
+            os.makedirs(out_path)  # before anything else, just to make sure
+
+        video_paths = {}
+
+        for pos in self.enabled_positions:
+            video_paths[pos] = f"{pos}.mp4"
+
+        manager = Manager()
+
+        self.packets_queue = faster_fifo.Queue(100000 * 1000)
+        self._worker_running = manager.Event()
+
+        self.worker = Process(target=self._recorder_thread,
+                                args=(self.out_path, self.packets_queue, video_paths, self._worker_running))
+
+        self.open_videos = {}
+
+    def _recorder_thread(self, out_path: str, packets_queue: faster_fifo.Queue, video_paths: dict, running: Event):
+
+        metadata_file = open(os.path.join(out_path, "metadata.pkl"), "wb")
+
+        pickle.dump(video_paths, metadata_file)
+
+        while running.is_set():
+
+            packet = packets_queue.get()
+
+            if packet is None:
+                break  # send None to stop proc
+
+            pickle.dump(packet, metadata_file)
+
+        metadata_file.close()
+
+        print("Recorder thread has closed all open files!")
+
+    def start(self):
+        """
+        Opens the video files and makes sure the Recorder is ready to receive data packets.
+        Is called automatically by __enter__() if the Recorder is called within a Python "with" statement.
+        """
+
+        self._worker_running.set()
+        self.worker.start()
+
+        for pos in self.enabled_positions:
+            path = os.path.join(self.out_path, f"{pos}.mp4")
+            self.open_videos[pos] = VideoWriteBuffer(path, self.resolution)  # excluding them from child process
+
+    def close(self):
+        """Closes video and metadata files and cleans all used resources."""
+
+        for video_writer in self.open_videos.values():
+            video_writer.close()
+
+        print("closed video writers")
+
+        self._worker_running.clear()
+        self.packets_queue.put(None)
+        self.worker.join()
+
+    def __enter__(self):
+        """This allows the Recorder to be (optionally) used in Python 'with' statements"""
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """This allows the Recorder to be (optionally) used in Python 'with' statements"""
+        self.close()
+
+    def record_packet(self, packet: dict):
+        """
+        Appends a new packet to the dataset on disk.
+
+        Args:
+            packet (dict): Data packet as provided by Streamer type objects.
+        """
+
+        # TODO multiple queues? im1, im2, im3 and data
+
+        packet = deepcopy(packet)  # making sure no one edits it later
+
+        if "images" in packet.keys():
+            images = packet["images"]
+            saved_images = {}
+
+            for pos, img in images.items():
+                frame_index = self.open_videos[pos].write_frame(img)
+                saved_images[pos] = frame_index
+
+            packet["images"] = saved_images
+
+        # print(packet["images"])
+
+        self.packets_queue.put(packet)
+
+
+class FastCompressedRecorder:
+    """
+    Takes in a car data generator such as the one in the Streamer class and records its output to disk for later use.
+    Images will be saved in a separate video file for each camera POV.
+    The rest of the data will be appended to a binary file using pickle.
+    The first object in the file is a dict which specifies the names of the video files for each camera.
+    Subsequent calls to pickle.load() will return the data packets.
+    If packets contain images they will specify for each camera an index of a frame,
+     which has to be extracted from the appropriate video file.
+    """
+
+    def __init__(self, out_path: Optional[str] = "./test_recording/"):
+        """
+        Instantiates the Recorder with the details of the dataset that will be recorded.
+        To be ready for recording start() needs to be called.
+        This is done automatically if the Recorder is called within a Python "with" statement.
+
+        Args:
+            out_path (Optional[str]): Directory where the dataset will be saved on disk
+        """
+
+        self.out_path = out_path
+
+        # load settings from configuration file
+        with open(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config.yaml")), "r") as f:
+            self.settings = yaml.load(f, Loader=yaml.SafeLoader)
+
+        self.enabled_positions = list(self.settings["camera_ids"].keys())
+        self.resolution = (self.settings["video_resolution"]["width"], self.settings["video_resolution"]["height"])
+
+        manager = Manager()
+
+        self.packets_queue = faster_fifo.Queue(1024 ** 3)  # 1 GB buffer
+        self._worker_running = manager.Event()
+
+        self.worker = Process(target=self._recorder_thread,
+                                args=(self.out_path, self.packets_queue, self.enabled_positions, self.resolution, self._worker_running))
+
+    def _recorder_thread(self, out_path: str, packets_queue: faster_fifo.Queue, enabled_positions: List[int], resolution: Tuple[int], running: Event):
+
+        if not os.path.exists(out_path):
+            os.makedirs(out_path)
+
+        open_videos = {}
+
+        for pos in enabled_positions:
+            path = os.path.join(out_path, f"{pos}.mp4")
+            open_videos[pos] = VideoWriteBuffer(path, resolution)
+
+        metadata_file = open(os.path.join(out_path, "metadata.pkl"), "wb")
+
+        video_paths = {}
+
+        for pos, video_writer in open_videos.items():
+            video_paths[pos] = os.path.basename(video_writer.path)
+
+        pickle.dump(video_paths, metadata_file)
+
+        jit_compressor = JITCompressor()
+
+        while running.is_set():
+            # TODO
+
+            packet = packets_queue.get()
+
+            packet = deepcopy(packet)  # making sure no one edits it later
+
+            packet = jit_compressor.compress_next_packet(packet)
+
+            if "images" in packet.keys():
+                images = packet["images"]
+                saved_images = {}
+
+                for pos, img in images.items():
+                    frame_index = open_videos[pos].write_frame(img)
+                    saved_images[pos] = frame_index
+
+                new_packet = deepcopy(packet)
+                new_packet["images"] = saved_images
+            else:
+                new_packet = deepcopy(packet)
+
+            pickle.dump(new_packet, metadata_file)
+
+        metadata_file.close()
+
+        for video_writer in open_videos.values():
+            video_writer.close()
+
+    def start(self):
+        """
+        Opens the video files and makes sure the Recorder is ready to receive data packets.
+        Is called automatically by __enter__() if the Recorder is called within a Python "with" statement.
+        """
+
+        self._worker_running.set()
+        self.worker.start()
+
+    def close(self):
+        """Closes video and metadata files and cleans all used resources."""
+
+        self._worker_running.clear()
+        self.worker.join()
+
+    def __enter__(self):
+        """This allows the Recorder to be (optionally) used in Python 'with' statements"""
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """This allows the Recorder to be (optionally) used in Python 'with' statements"""
+        self.close()
+
+    def record_packet(self, packet: dict):
+        """
+        Appends a new packet to the dataset on disk.
+
+        Args:
+            packet (dict): Data packet as provided by Streamer type objects.
+        """
+
+        # TODO multiple queues? im1, im2, im3 and data
+
+        self.packets_queue.put(packet)
+
+
 if __name__ == '__main__':
 
-    raw_generator = DatasetPlayer("../saved_datasets/dataset_shake.json").stream_generator(loop=False)
+    streamer = SharedMemStreamer()
+    # TODO give it a warmup period?
+    source_stream = streamer.stream_generator()
 
-    compressed_generator = Compressor(raw_generator).compressed_generator()
+    # with Player("./saved_datasets/recording_test") as p:
+    #
+    #     source_stream = Decompressor(p.stream_generator(loop=True)).uncompressed_generator()
 
-    with Recorder(compressed_generator) as r:
+    with FastSeparateRecorder(out_path="./saved_datasets/asjhdajhsdjhasd") as r:
 
-        # for i in range(100):
-        #     r.record_packet(next(raw_generator))
+        jit_compressor = JITCompressor()
 
-        for p in compressed_generator:
-            r.record_packet(p)
+        for i in range(100):
 
-    with Player() as p:
+            recv_obj = next(source_stream)
 
-        uncomp_generator = Decompressor(p.stream_generator(True)).uncompressed_generator()
+            compressed = jit_compressor.compress_next_packet(
+                recv_obj)  # TODO compress inside the recorder, decompress inside the player, with threads
 
-        for packet in uncomp_generator:
-
-            # print(sorted(packet["sensor_data"]["gps"], key=lambda x: x.lower()))
-            # print(packet["datetime"])
-            print(packet["sensor_data"]["imu"])
-
-            if "images" in packet:
-                for pos, img in packet["images"].items():
-
-                    img = cv2.resize(img, (int(img.shape[1] / 2), int(img.shape[0] / 2)))
-                    cv2.imshow(pos, img)
-                    cv2.waitKey(1)
+            r.record_packet(compressed)

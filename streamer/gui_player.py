@@ -49,24 +49,18 @@ class StreamThread(QThread):
 
     def run(self):
 
-        streamer = SharedMemStreamer()
-        # TODO give it a warmup period?
-        source_stream = streamer.stream_generator()
+        with Player(self.rec_path) as p:
 
-        # with Player("./saved_datasets/recording_test") as p:
-        #
-        #     source_stream = Decompressor(p.stream_generator(loop=True)).uncompressed_generator()
-
-        with FastRecorder(out_path=self.rec_path) as r:
+            source_stream = Decompressor(p.stream_generator(loop=True)).uncompressed_generator()
 
             telemetry_delay = self.telemetry_delay_frames + 1
             multiple_delay_ms = []
 
             last_time = time.time()
 
-            jit_compressor = JITCompressor()
-
             debug_time = time.time()
+
+            previous_packet_datetime = None
 
             while self._is_running:
 
@@ -75,15 +69,15 @@ class StreamThread(QThread):
                 print("delay_recv = ", time.time() - debug_time)
                 debug_time = time.time()
 
-                compressed = jit_compressor.compress_next_packet(recv_obj) # TODO compress inside the recorder, decompress inside the player, with threads
+                # simulate delay
 
-                print("delay_compress = ", time.time() - debug_time)
-                debug_time = time.time()
+                if previous_packet_datetime is None:
+                    previous_packet_datetime = recv_obj['datetime']
+                else:
+                    required_delay = (recv_obj['datetime'] - previous_packet_datetime).total_seconds()
+                    previous_packet_datetime = recv_obj['datetime']
 
-                r.record_packet(compressed)
-
-                print("delay_to_disk = ", time.time() - debug_time)
-                debug_time = time.time()
+                    time.sleep(required_delay)
 
                 # show telemetry to user
 
@@ -224,7 +218,7 @@ class MyWindow(QtWidgets.QMainWindow):
         # pg.setConfigOption('leftButtonPan', False)
 
         super(MyWindow, self).__init__()
-        uic.loadUi('gui/record.ui', self)
+        uic.loadUi('gui/player.ui', self)
 
         self.stream_label_left = self.findChild(QtWidgets.QLabel, 'labelStreamLeft')
         self.stream_label_center = self.findChild(QtWidgets.QLabel, 'labelStreamCenter')

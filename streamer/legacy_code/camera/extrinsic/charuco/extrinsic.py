@@ -4,6 +4,7 @@ import pickle
 import statistics
 from scipy import interpolate
 import math
+from glob import glob
 
 
 def undistort_image(img, calib_results):
@@ -65,6 +66,8 @@ for f, meas in calib_samples.items():
     corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(gray, aruco_dict)
 
     if len(corners) > 0:
+
+        # TODO corners subpix
 
         num_corners, corners2, ids2 = cv2.aruco.interpolateCornersCharuco(corners, ids, gray, board)
 
@@ -211,3 +214,114 @@ for f, meas in calib_samples.items():
 
     else:
         print("No corners found!")
+
+predict_meters_from_pixels = interpolate.interp1d(all_mean_pixel_meters, all_mean_distances, kind='linear')
+
+# print("Predicted distance from camera:", predict_meters_from_pixels(0.000172572845549428945))
+
+# TODO predict pose and extract projection angle
+
+for val_img_path in glob('./validation/*.jpg'):
+
+    try:
+
+        img = cv2.imread(val_img_path)
+        img = undistort_image(img, calib_results)
+
+        meas_draw = img.copy()
+
+        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+
+        corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(gray, aruco_dict)
+
+        if len(corners) > 0:
+
+            # TODO corners subpix
+
+            num_corners, corners2, ids2 = cv2.aruco.interpolateCornersCharuco(corners, ids, gray, board)
+
+            if corners2 is None or ids is None:
+                continue
+
+            # cv2.aruco.drawDetectedMarkers(gray, corners, ids)
+            # cv2.aruco.drawDetectedCornersCharuco(gray, corners2, ids2, (0, 0, 255))
+
+            corners_dict = {}
+
+            for i in range(corners2.shape[0]):
+                corners_dict[ids2[i].item()] = tuple(corners2[i][0])
+
+            for corner_id, corner_coords in corners_dict.items():
+                int_coords = (int(corner_coords[0]), int(corner_coords[1]))
+
+                cv2.circle(img, int_coords, 10, (0, 0, 255), -1)
+                cv2.putText(img, str(corner_id), int_coords, cv2.FONT_HERSHEY_SIMPLEX, 3, (255, 0, 0), 5, cv2.LINE_AA)
+
+            show_small(img, "markers")
+
+            edges_set = set()
+            diagonals_set = set()
+
+            for row in range(BOARD_SHAPE[1] - 1):
+                for col in range(BOARD_SHAPE[0] - 1):
+
+                    crt_point = corners_dict[col + row * (BOARD_SHAPE[0] - 1)]
+
+                    if (col + 1) < BOARD_SHAPE[0] - 1:
+                        # right
+                        target = corners_dict[(col + 1) + row * (BOARD_SHAPE[0] - 1)]
+                        edges_set.add((crt_point, target))
+                    if (row + 1) < BOARD_SHAPE[1] - 1:
+                        # up
+                        target = corners_dict[col + (row + 1) * (BOARD_SHAPE[0] - 1)]
+                        edges_set.add((crt_point, target))
+
+                    if (col + 1) < BOARD_SHAPE[0] - 1 and (row + 1) < BOARD_SHAPE[1] - 1:
+                        # slash
+                        target = corners_dict[(col + 1) + (row + 1) * (BOARD_SHAPE[0] - 1)]
+                        diagonals_set.add((crt_point, target))
+                    if (col - 1) >= 0 and (row + 1) < BOARD_SHAPE[1] - 1:
+                        # backslash
+                        target = corners_dict[(col - 1) + (row + 1) * (BOARD_SHAPE[0] - 1)]
+                        diagonals_set.add((crt_point, target))
+
+            for edge in edges_set:
+                cv2.line(meas_draw, edge[0], edge[1], (0, 255, 0), 5)
+
+                # actual = math.sqrt(SQUARE_SIZE ** 2 - abs(d1 - d2) ** 2)
+                actual = SQUARE_SIZE
+
+                pixels = math.sqrt((edge[0][0] - edge[1][0]) ** 2 + (edge[0][1] - edge[1][1]) ** 2)
+
+                pixel_to_meters = actual / pixels
+
+                pixel_to_meters_all.append(pixel_to_meters)
+
+                # TODO there can be a different vertical pixel density than the horizontal one, maybe split measurement?
+
+            for diag in diagonals_set:
+                cv2.line(meas_draw, diag[0], diag[1], (0, 0, 255), 5)
+
+                # d1 = distance_func(diag[0][0], diag[0][1])
+                # d2 = distance_func(diag[1][0], diag[1][1])
+                #
+                # actual = math.sqrt((math.sqrt(2) * SQUARE_SIZE) ** 2 - abs(d1 - d2) ** 2)
+
+                actual = math.sqrt(2) * SQUARE_SIZE
+
+                pixels = math.sqrt((diag[0][0] - diag[1][0]) ** 2 + (diag[0][1] - diag[1][1]) ** 2)
+
+                pixel_to_meters = actual / pixels
+
+                pixel_to_meters_all.append(pixel_to_meters)
+
+            mean_pixel_to_meters = statistics.mean(pixel_to_meters_all)
+
+            print("Predicted distance from camera:", predict_meters_from_pixels(mean_pixel_to_meters))
+
+            print(val_img_path)
+            show_small(img, "img_valid")
+            cv2.waitKey(0)
+
+    except:
+        continue

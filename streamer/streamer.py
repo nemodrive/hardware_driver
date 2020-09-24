@@ -5,6 +5,7 @@ import pickle
 import logging
 from datetime import datetime
 from typing import Dict
+import time
 
 import libs.yei3.threespace_api as ts_api
 from providers.gps_provider import GPSProvider
@@ -88,6 +89,8 @@ class SharedMemStreamer:
                 "datetime": datetime.now()
             }
 
+            last_time = time.time()
+
             # TODO check sync
             if self.settings["enabled_features"]["video"]:
 
@@ -122,11 +125,17 @@ class SharedMemStreamer:
                     else:
                         return_packet["images"][pos] = frame
 
+            print("get_from_cams=", time.time() - last_time)
+            last_time = time.time()
+
             # get sensor data
 
             if self.settings["enabled_features"]["imu"]:
 
                 imu_batch = self.imu_device.getStreamingBatch()
+
+                print("get_from_imu=", time.time() - last_time)
+                last_time = time.time()
 
                 return_packet["sensor_data"]["imu"] = {
                     "orientation_quaternion": {
@@ -149,6 +158,9 @@ class SharedMemStreamer:
                     },
                 }
 
+            print("packet_from_imu=", time.time() - last_time)
+            last_time = time.time()
+
             if self.settings["enabled_features"]["gps"]:
                 gps_msgs = self.gps_provider.get_latest_messages()
 
@@ -156,5 +168,8 @@ class SharedMemStreamer:
 
                 for msg_type, msg_value in gps_msgs.items():
                     return_packet["sensor_data"]["gps"][msg_type] = str(msg_value)
+
+            print("get_from_gps=", time.time() - last_time)
+            last_time = time.time()
 
             yield return_packet

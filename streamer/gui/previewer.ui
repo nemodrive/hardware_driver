@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Dataset Recorder</string>
+   <string>Sensors Preview</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
@@ -40,35 +40,12 @@
        <number>10</number>
       </property>
       <item>
-       <widget class="QLabel" name="label_2">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="text">
-         <string>File Path:</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLineEdit" name="lineEditRecPath">
-        <property name="text">
-         <string>./saved_datasets/recording_/</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item>
        <widget class="QPushButton" name="pushButtonRecord">
         <property name="styleSheet">
          <string notr="true">color:rgb(0, 171, 14);</string>
         </property>
         <property name="text">
-         <string>REC</string>
+         <string>PREVIEW</string>
         </property>
        </widget>
       </item>

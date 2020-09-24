@@ -12,9 +12,6 @@ import json
 import numpy as np
 
 from streamer import SharedMemStreamer
-from recording.recorder import Recorder, ThreadedRecorder, Player, PipedRecorder, FastRecorder, FastCompressedRecorder
-from compression.compressor import JITCompressor
-from compression.decompressor import Decompressor
 
 
 class StreamThread(QThread):
@@ -28,10 +25,9 @@ class StreamThread(QThread):
 
     signal_imu = pyqtSignal(dict)
 
-    def __init__(self, rec_path):
+    def __init__(self):
         super(StreamThread, self).__init__()
 
-        self.rec_path = rec_path
         self._is_running = True
 
         self.telemetry_delay_frames = 10
@@ -53,89 +49,71 @@ class StreamThread(QThread):
         # TODO give it a warmup period?
         source_stream = streamer.stream_generator()
 
-        # with Player("./saved_datasets/recording_test") as p:
-        #
-        #     source_stream = Decompressor(p.stream_generator(loop=True)).uncompressed_generator()
+        telemetry_delay = self.telemetry_delay_frames + 1
+        multiple_delay_ms = []
 
-        with FastRecorder(out_path=self.rec_path) as r:
+        last_time = time.time()
 
-            telemetry_delay = self.telemetry_delay_frames + 1
-            multiple_delay_ms = []
+        debug_time = time.time()
 
-            last_time = time.time()
+        while self._is_running:
 
-            jit_compressor = JITCompressor()
+            recv_obj = next(source_stream)
 
+            print("delay_recv = ", time.time() - debug_time)
             debug_time = time.time()
 
-            while self._is_running:
+            # show telemetry to user
 
-                recv_obj = next(source_stream)
+            for pos in recv_obj["images"].keys():
+                recv_obj["images"][pos] = cv2.resize(recv_obj["images"][pos],
+                                                     (int(recv_obj["images"][pos].shape[1] / 2.8),
+                                                      int(recv_obj["images"][pos].shape[0] / 2.8)))
 
-                print("delay_recv = ", time.time() - debug_time)
-                debug_time = time.time()
+            # TODO always check key exists!!! also in streamer
+            try:
+                self.signal_change_pixmap_left.emit(self.img_ocv_to_qt(recv_obj["images"]["left"]))
+            except:
+                pass
 
-                compressed = jit_compressor.compress_next_packet(recv_obj) # TODO compress inside the recorder, decompress inside the player, with threads
+            try:
+                self.signal_change_pixmap_center.emit(self.img_ocv_to_qt(recv_obj["images"]["center"]))
+            except:
+                pass
 
-                print("delay_compress = ", time.time() - debug_time)
-                debug_time = time.time()
+            try:
+                self.signal_change_pixmap_right.emit(self.img_ocv_to_qt(recv_obj["images"]["right"]))
+            except:
+                pass
 
-                r.record_packet(compressed)
+            delay = time.time() - last_time
+            last_time = time.time()
 
-                print("delay_to_disk = ", time.time() - debug_time)
-                debug_time = time.time()
+            multiple_delay_ms.append(delay * 1000)
 
-                # show telemetry to user
+            try:
+                self.signal_imu.emit(recv_obj["sensor_data"]["imu"])
+            except:
+                pass
 
-                for pos in recv_obj["images"].keys():
-                    recv_obj["images"][pos] = cv2.resize(recv_obj["images"][pos],
-                                                         (int(recv_obj["images"][pos].shape[1] / 2.8),
-                                                          int(recv_obj["images"][pos].shape[0] / 2.8)))
+            try:
+                self.signal_telemetry_text.emit(json.dumps(recv_obj["sensor_data"], indent=4))
+            except:
+                pass
 
-                # TODO always check key exists!!! also in streamer
-                try:
-                    self.signal_change_pixmap_left.emit(self.img_ocv_to_qt(recv_obj["images"]["left"]))
-                except:
-                    pass
+            if telemetry_delay > self.telemetry_delay_frames:
 
-                try:
-                    self.signal_change_pixmap_center.emit(self.img_ocv_to_qt(recv_obj["images"]["center"]))
-                except:
-                    pass
+                telemetry_delay = 0
 
-                try:
-                    self.signal_change_pixmap_right.emit(self.img_ocv_to_qt(recv_obj["images"]["right"]))
-                except:
-                    pass
+                avg_delay_ms = statistics.mean(multiple_delay_ms)
+                multiple_delay_ms.clear()
+                self.signal_fps.emit(int(1/avg_delay_ms * 1000))
+                self.signal_ms.emit(int(avg_delay_ms))
+            else:
+                telemetry_delay += 1
 
-                delay = time.time() - last_time
-                last_time = time.time()
-
-                multiple_delay_ms.append(delay * 1000)
-
-                try:
-                    self.signal_imu.emit(recv_obj["sensor_data"]["imu"])
-                except:
-                    pass
-
-                try:
-                    self.signal_telemetry_text.emit(json.dumps(recv_obj["sensor_data"], indent=4))
-                except:
-                    pass
-
-                if telemetry_delay > self.telemetry_delay_frames:
-
-                    telemetry_delay = 0
-
-                    avg_delay_ms = statistics.mean(multiple_delay_ms)
-                    multiple_delay_ms.clear()
-                    self.signal_fps.emit(int(1/avg_delay_ms * 1000))
-                    self.signal_ms.emit(int(avg_delay_ms))
-                else:
-                    telemetry_delay += 1
-
-                print("delay_gui = ", time.time() - debug_time)
-                debug_time = time.time()
+            print("delay_gui = ", time.time() - debug_time)
+            debug_time = time.time()
 
     def stop(self):
         self._is_running = False
@@ -202,8 +180,8 @@ class MyWindow(QtWidgets.QMainWindow):
         self.curve_orientation_y.setData(self.imu_data_orientation_y)
         self.curve_orientation_z.setData(self.imu_data_orientation_z)
 
-    def start_stream(self, rec_path):
-        self.stream_thread = StreamThread(rec_path)
+    def start_stream(self):
+        self.stream_thread = StreamThread()
 
         self.stream_thread.signal_change_pixmap_left.connect(self.set_pixmap_left)
         self.stream_thread.signal_change_pixmap_center.connect(self.set_pixmap_center)
@@ -224,13 +202,11 @@ class MyWindow(QtWidgets.QMainWindow):
         # pg.setConfigOption('leftButtonPan', False)
 
         super(MyWindow, self).__init__()
-        uic.loadUi('gui/record.ui', self)
+        uic.loadUi('gui/previewer.ui', self)
 
         self.stream_label_left = self.findChild(QtWidgets.QLabel, 'labelStreamLeft')
         self.stream_label_center = self.findChild(QtWidgets.QLabel, 'labelStreamCenter')
         self.stream_label_right = self.findChild(QtWidgets.QLabel, 'labelStreamRight')
-
-        self.line_edit_rec_path = self.findChild(QtWidgets.QLineEdit, 'lineEditRecPath')
 
         self.button_record = self.findChild(QtWidgets.QPushButton, 'pushButtonRecord')
         self.button_record.clicked.connect(self.on_click_rec)
@@ -291,7 +267,7 @@ class MyWindow(QtWidgets.QMainWindow):
 
     @pyqtSlot()
     def on_click_rec(self):
-        self.start_stream(self.line_edit_rec_path.text())
+        self.start_stream()
         self.button_stop.setEnabled(True)
         self.button_record.setEnabled(False)
 

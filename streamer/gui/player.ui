@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Dataset Recorder</string>
+   <string>Dataset Player</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
@@ -68,7 +68,7 @@
          <string notr="true">color:rgb(0, 171, 14);</string>
         </property>
         <property name="text">
-         <string>REC</string>
+         <string>PLAY</string>
         </property>
        </widget>
       </item>
