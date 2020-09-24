@@ -3,7 +3,7 @@ enabled_features:
   video_undistort: False
   gps: True
   imu: True
-  speed: False
+  speed: True
   monitoring_panel: True
 
 #camera_serial_numbers:
@@ -20,10 +20,10 @@ video_resolution:
   width: 2064
   height: 1544
 
-gps_port: /dev/ttyACM0
-imu_port: /dev/ttyACM1
+gps_port: /dev/ttyACM1
+imu_port: /dev/ttyACM0
 
-can_device: vcan0
+can_device: slcan0
 can_dbc_file: logan.dbc
 
 network_streaming:

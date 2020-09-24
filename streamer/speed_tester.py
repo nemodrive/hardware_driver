@@ -12,8 +12,11 @@ CAN_CMD_NAMES = dict({
         })
 
 db = cantools.db.load_file('logan.dbc')
-can_bus = can.interface.Bus('vcan0', bustype='socketcan')
+can_bus = can.interface.Bus('slcan0', bustype='socketcan')
 
+"""
+bring up can: https://elinux.org/Bringing_CAN_interface_up
+"""
 with open(CAN_LOG) as fp:
     while True:
         can_entry = fp.readline()

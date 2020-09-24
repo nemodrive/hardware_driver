@@ -21,6 +21,9 @@ class SpeedData:
     def __str__(self):
         return "SpeedData[ts=%.4f, speed=%6.2f]" % (self.timestamp, self.speed)
 
+    def __repr__(self):
+        return self.__str__()
+
 
 class SpeedProvider:
     def __init__(self, can_device: str = "can0", dbc_file: str = "logan.dbc"):
@@ -45,6 +48,8 @@ class SpeedProvider:
 
         self._worker = None
         self._spawn_worker()
+
+        self.current_speed = 0.0
 
     def _spawn_worker(self) -> None:
         logging.debug("Speed Provider is spawning a new worker process")
@@ -116,30 +121,34 @@ class SpeedProvider:
         """This allows the SpeedProvider to be (optionally) used in python 'with' statements"""
         self.close()
 
-    def get_latest_messages(self) -> List[SpeedData]:
+    def get_latest_messages(self) -> SpeedData:
         """Get the latest speed readings since last call"""
 
         # TODO check worker.is_alive() and check timestamps for the packages are reasonable,
         #  else clear the cache and attempt to restart the worker?
-        speed_readings: List[SpeedData] = []
+        # speed_readings: List[SpeedData] = []
 
         self._speed_cache_lock.acquire()
 
         # get all the messages from the Queue until it is empty
         while not self._speed_cache.empty():
-            speed_data = self._speed_cache.get_nowait()
-            speed_readings.append(speed_data)
+            self.current_speed = self._speed_cache.get_nowait()
+            # speed_readings.append(speed_data)
             self._speed_cache.task_done()
 
         self._speed_cache_lock.release()
 
-        return speed_readings
+        return self.current_speed
 
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 
-    with SpeedProvider(can_device='vcan0', dbc_file="logan.dbc") as p:
+    """
+    bring up can: https://elinux.org/Bringing_CAN_interface_up
+    """
+
+    with SpeedProvider(can_device='slcan0', dbc_file="../logan.dbc") as p:
         for i in range(10):
             crt_cache = p.get_latest_messages()
             for speed_data in crt_cache:

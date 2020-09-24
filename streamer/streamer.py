@@ -172,19 +172,23 @@ class SharedMemStreamer:
 
                 return_packet["sensor_data"]["gps"] = {}
 
+                # for msg_type, msg_value in gps_msgs.items():
+                #     return_packet["sensor_data"]["gps"][msg_type] = {
+                #         "msg": str(msg_value),
+                #         "timestamp": msg_value.timestamp
+                #     }
                 for msg_type, msg_value in gps_msgs.items():
-                    return_packet["sensor_data"]["gps"][msg_type] = {
-                        "msg": str(msg_value),
-                        "timestamp": msg_value.timestamp
-                    }
+                    return_packet["sensor_data"]["gps"][msg_type] = str(msg_value)
 
             if self.settings["enabled_features"]["speed"]:
-                speed_msgs = self.speed_provider.get_latest_messages()
+                # speed_msgs = self.speed_provider.get_latest_messages()
+                # print(speed_msgs)
+                speed_msg = self.speed_provider.get_latest_messages()
                 return_packet["sensor_data"]["speed"] = {}
 
-                if speed_msgs:
+                if speed_msg:
                     # always select just the most recent speed recording - i.e. we implicitly drop unused messages
-                    speed_msg = speed_msg[-1] # since we have a queue, the last message will be the most recent one
+                    # speed_msg = speed_msgs[-1] # since we have a queue, the last message will be the most recent one
                     return_packet["sensor_data"]["speed"]["mps"] = speed_msg.speed
                     return_packet["sensor_data"]["speed"]["timestamp"] = speed_msg.timestamp
 

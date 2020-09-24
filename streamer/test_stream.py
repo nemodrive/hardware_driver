@@ -27,14 +27,14 @@ if __name__ == '__main__':
         last_time = time.time()
 
         print(fps)
-
+        print(packet["speed"])
 
         # print(packet["images"].keys())
 
-        cv2.imshow("center", packet["images"]["center"])
+        # cv2.imshow("center", packet["images"]["center"])
         # cv2.imshow("left", packet["images"]["left"])
         # cv2.imshow("right", packet["images"]["right"])
-        cv2.waitKey(0)
+        # cv2.waitKey(0)
         # cv2.destroyAllWindows()
 
         # for pos, image in packet["images"].items():
