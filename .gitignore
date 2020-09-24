@@ -1,1 +1,4 @@
 prerequisites/Vimba_v4.0_Linxu.tgz
+*.pyc
+*.png
+.idea/

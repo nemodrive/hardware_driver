@@ -23,7 +23,7 @@ class SpeedData:
 
 
 class SpeedProvider:
-    def __init__(self, can_device:str="can0", dbc_file:str="logan.dbc"):
+    def __init__(self, can_device: str = "can0", dbc_file: str = "logan.dbc"):
         """
             SpeedProvider works in a manner similar to GPS Provider.
             It spawns a child worker process which constantly receives data from the CAN device.

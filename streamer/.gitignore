@@ -2,3 +2,4 @@
 __pycache__
 saved_datasets
 legacy_code/camera/calibration_images/
+**/*.png
