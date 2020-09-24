@@ -735,16 +735,13 @@ class FastSeparateRecorder:
         self.enabled_positions = list(self.settings["camera_ids"].keys())
         self.resolution = (self.settings["video_resolution"]["width"], self.settings["video_resolution"]["height"])
 
-        self.open_videos = {}
-
-        for pos in self.enabled_positions:
-            path = os.path.join(out_path, f"{pos}.mp4")
-            self.open_videos[pos] = VideoWriteBuffer(path, self.resolution)
+        if not os.path.exists(out_path):
+            os.makedirs(out_path)  # before anything else, just to make sure
 
         video_paths = {}
 
-        for pos, video_writer in self.open_videos.items():
-            video_paths[pos] = os.path.basename(video_writer.path)
+        for pos in self.enabled_positions:
+            video_paths[pos] = f"{pos}.mp4"
 
         manager = Manager()
 
@@ -754,19 +751,20 @@ class FastSeparateRecorder:
         self.worker = Process(target=self._recorder_thread,
                                 args=(self.out_path, self.packets_queue, video_paths, self._worker_running))
 
-    def _recorder_thread(self, out_path: str, packets_queue: faster_fifo.Queue, video_paths: dict, running: Event):
+        self.open_videos = {}
 
-        if not os.path.exists(out_path):
-            os.makedirs(out_path)
+    def _recorder_thread(self, out_path: str, packets_queue: faster_fifo.Queue, video_paths: dict, running: Event):
 
         metadata_file = open(os.path.join(out_path, "metadata.pkl"), "wb")
 
         pickle.dump(video_paths, metadata_file)
 
         while running.is_set():
-            # TODO
 
             packet = packets_queue.get()
+
+            if packet is None:
+                break  # send None to stop proc
 
             pickle.dump(packet, metadata_file)
 
@@ -783,6 +781,10 @@ class FastSeparateRecorder:
         self._worker_running.set()
         self.worker.start()
 
+        for pos in self.enabled_positions:
+            path = os.path.join(self.out_path, f"{pos}.mp4")
+            self.open_videos[pos] = VideoWriteBuffer(path, self.resolution)  # excluding them from child process
+
     def close(self):
         """Closes video and metadata files and cleans all used resources."""
 
@@ -792,6 +794,7 @@ class FastSeparateRecorder:
         print("closed video writers")
 
         self._worker_running.clear()
+        self.packets_queue.put(None)
         self.worker.join()
 
     def __enter__(self):
