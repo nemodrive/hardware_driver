@@ -1,0 +1,7 @@
+https://github.com/anthwlock/untrunc
+
+sudo apt-get install yasm wget
+make FF_VER=3.3.9
+sudo cp untrunc /usr/local/bin
+
+untrunc -s ../recording_that_works/center.mp4 ../recording_broken/center.mp4
