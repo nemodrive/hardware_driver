@@ -9,3 +9,4 @@ scipy
 pyqt5
 pyqt5-tools
 pyqtgraph
+cantools
