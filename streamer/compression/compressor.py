@@ -1,6 +1,7 @@
 import numpy as np
 from copy import deepcopy
 from typing import Iterator
+import yaml
 
 
 class Compressor:
@@ -116,6 +117,53 @@ class JITCompressor:
 
         for k in to_delete:
             del target[k]
+
+    def compress_next_packet(self, source_packet) -> dict:
+        """
+        Returns compressed data.
+         # TODO make the other extend this class
+
+         Returns:
+            dict: Compressed packet
+        """
+
+        if self.last_packet is None:
+            self.last_packet = deepcopy(source_packet)
+            return source_packet
+        else:
+            source_packet = deepcopy(source_packet)
+            self._prune_dict(self.last_packet, source_packet)
+            return source_packet
+
+
+class ImageOnlyJITCompressor:
+    """
+    Wraps a generator like the one in the Streamer class
+    and removes redundant repeated data from consecutive packets,
+    in preparation for saving on disk or streaming over the network.
+    """
+
+    def __init__(self):
+        self.last_packet = None
+
+        with open("config.yaml", "r") as f:
+            self.settings = yaml.load(f, Loader=yaml.SafeLoader)
+
+    def _prune_dict(self, reference: dict, target: dict):
+        """
+        Removes elements in the target dict which already exist in the reference dict.
+        TODO WARNING the two dicts will change after the function call
+
+        Args:
+            reference (dict): reference generator
+            target (dict): target generator
+        """
+
+        for pos in self.settings["camera_ids"].keys():
+            if np.array_equal(reference["images"][pos], target["images"][pos]):
+                del target["images"][pos]
+            else:
+                reference["images"][pos] = target["images"][pos].copy()
 
     def compress_next_packet(self, source_packet) -> dict:
         """

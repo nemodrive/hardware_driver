@@ -146,13 +146,18 @@ if __name__ == '__main__':
 
     """
     bring up can: https://elinux.org/Bringing_CAN_interface_up
+    
+    sudo slcand -o -s6 -t hw -S 500000 /v/ttyUSBX
+    sudo ip link set up slcan0
     """
 
     with SpeedProvider(can_device='slcan0', dbc_file="../logan.dbc") as p:
         for i in range(10):
             crt_cache = p.get_latest_messages()
-            for speed_data in crt_cache:
-                print("\tLatest Speed Message:", speed_data)
+            # for speed_data in crt_cache:
+            #     print("\tLatest Speed Message:", speed_data)
+
+            print(crt_cache)
 
             time.sleep(2)
 

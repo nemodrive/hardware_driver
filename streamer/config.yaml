@@ -3,7 +3,7 @@ enabled_features:
   video_undistort: False
   gps: True
   imu: True
-  speed: True
+  canbus: True
   monitoring_panel: True
 
 #camera_serial_numbers:
@@ -13,14 +13,14 @@ enabled_features:
 
 camera_ids:
   center: DEV_000F315CDD58
-  left: DEV_000F315CD617
-  right: DEV_000F315CDD5B
+  left: DEV_000F315CDD5B
+  right: DEV_000F315CD617
 
 video_resolution:
   width: 2064
   height: 1544
 
-gps_port: /dev/ttyACM1
+gps_port: /dev/ttyACM2
 imu_port: /dev/ttyACM0
 
 can_device: slcan0

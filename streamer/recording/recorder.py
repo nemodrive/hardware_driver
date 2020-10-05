@@ -13,7 +13,11 @@ from compression.compressor import Compressor, JITCompressor
 from compression.decompressor import Decompressor, JITDecompressor
 from streamer import SharedMemStreamer
 
+import time
+
 import faster_fifo
+
+from shmq import SharedMemoryQueue
 
 
 class VideoWriteBuffer:
@@ -58,6 +62,77 @@ class VideoWriteBuffer:
         """Closes the video file and cleans all used resources."""
 
         self._video_writer.release()
+
+
+class ShmqVideoWriteBuffer:
+    """Wrapper for the chosen video encoder/writer backend, which also keeps track of the written frame indices."""
+
+    def __init__(self, path: str, resolution: Tuple[int, int]):
+        """
+        Instantiates the buffer with the parameters of the video that will be recorded.
+        # TODO add possibility to record using raw video codecs?
+
+        Args:
+            path (str): Directory in which the video will be saved
+            resolution (Tuple[int, int]): Resolution of the frames in the video
+        """
+
+        self.path = path
+        self.resolution = resolution
+
+        self.output_queue = SharedMemoryQueue(element_shape=(resolution[0], resolution[1], 3), max_size=3, dtype=np.uint8)
+
+        manager = Manager()
+        self._is_running = manager.Event()
+        self._is_running.set()
+
+        self._worker = Process(target=self._recorder,
+                               args=(self.output_queue, self.path, self.resolution, self._is_running))
+
+        self._crt_frame = 0
+
+        self._worker.start()
+
+    def _recorder(self, input_queue: SharedMemoryQueue, path: str, resolution: Tuple[int, int], is_running: Event):
+
+        input_queue.register_worker()
+
+        self._fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        self._video_writer = cv2.VideoWriter(path, self._fourcc, 100.0, resolution)
+
+        print("Recording worker is ready")
+
+        while is_running.is_set():
+            print("get start")
+
+            frame = input_queue.get()
+
+            print("get end")
+
+            self._video_writer.write(frame)
+
+        self._video_writer.release()
+
+    def write_frame(self, frame: np.ndarray):
+        """
+        Append a new frame to the video on disk.
+
+        Args:
+            frame (numpy.ndarray): Frame as OpenCV format image
+        """
+
+        self._crt_frame += 1
+
+        self.output_queue.put(frame)
+
+        print("put end")
+
+        return self._crt_frame - 1
+
+    def close(self):
+        """Closes the video file and cleans all used resources."""
+        self._is_running.clear()
+        self._worker.join()
 
 
 class VideoReadBuffer:
@@ -783,7 +858,7 @@ class FastSeparateRecorder:
 
         for pos in self.enabled_positions:
             path = os.path.join(self.out_path, f"{pos}.mp4")
-            self.open_videos[pos] = VideoWriteBuffer(path, self.resolution)  # excluding them from child process
+            self.open_videos[pos] = VideoWriteBuffer(path, self.resolution) #ShmqVideoWriteBuffer(path, self.resolution)  # excluding them from child process
 
     def close(self):
         """Closes video and metadata files and cleans all used resources."""
@@ -818,6 +893,8 @@ class FastSeparateRecorder:
 
         packet = deepcopy(packet)  # making sure no one edits it later
 
+        last_time = time.time()
+
         if "images" in packet.keys():
             images = packet["images"]
             saved_images = {}
@@ -830,7 +907,13 @@ class FastSeparateRecorder:
 
         # print(packet["images"])
 
+        print(f"vwrite delay {time.time() - last_time}")
+        last_time = time.time()
+
         self.packets_queue.put(packet)
+
+        print(f"q put delay {time.time() - last_time}")
+        last_time = time.time()
 
 
 class FastCompressedRecorder:

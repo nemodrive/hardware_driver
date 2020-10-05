@@ -65,6 +65,10 @@ class StreamThread(QThread):
 
             # show telemetry to user
 
+
+            print(recv_obj["sensor_data"]["gps"])
+            print(recv_obj["sensor_data"]["canbus"])
+
             for pos in recv_obj["images"].keys():
                 recv_obj["images"][pos] = cv2.resize(recv_obj["images"][pos],
                                                      (int(recv_obj["images"][pos].shape[1] / 2.8),

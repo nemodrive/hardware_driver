@@ -114,6 +114,7 @@ class CameraSharedMemProvider:
             worker_initialized.clear()
             del shm_primitives["frame_buffer"]
             shm_primitives["shm"].close()
+            shm_primitives["shm"].unlink()
 
             logging.debug("Provider worker process has stopped correctly")  # TODO enable logging from worker process
 
@@ -167,8 +168,8 @@ class CameraSharedMemProvider:
         self._frame_buffer_lock.acquire()
 
         del self._child_frame_buffer
-        self._child_shm.close()
-        self._child_shm.unlink()
+        #self._child_shm.close()
+        #self._child_shm.unlink()
 
         self._frame_buffer_lock.release()
 

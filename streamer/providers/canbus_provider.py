@@ -61,7 +61,7 @@ class CanbusProvider:
 
                 logging.debug("Message from CAN %s" % msg)
 
-                for cmd_key, cmd_can in CAN_CMD_NAMES:
+                for cmd_key, cmd_can in CAN_CMD_NAMES.items():
                     cmd_name, data_name, can_id_str = cmd_can
 
                     # verify the type of the message by means of the can_id
@@ -76,6 +76,8 @@ class CanbusProvider:
                             "value": value,
                             "timestamp": msg.timestamp
                         }
+
+                        print(cmd_key)
 
                         canbus_cache_lock.release()
 
