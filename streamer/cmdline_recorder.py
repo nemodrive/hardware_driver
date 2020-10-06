@@ -69,7 +69,7 @@ if __name__ == '__main__':
     #
     #     source_stream = Decompressor(p.stream_generator(loop=True)).uncompressed_generator()
 
-    with FastSeparateRecorder(out_path="./saved_datasets/recordin_slight_speedup1") as r:
+    with FastSeparateRecorder(out_path="./saved_datasets/recording_debug") as r:
 
         jit_compressor = ImageOnlyJITCompressor() #JITCompressor()
 
@@ -77,7 +77,7 @@ if __name__ == '__main__':
 
         while not terminate:
 
-            recv_obj = next(source_stream) #generate_mock_packet()
+            recv_obj = next(source_stream)  # generate_mock_packet()
 
             # print(f"packet size = {sys.getsizeof(recv_obj)}")
 

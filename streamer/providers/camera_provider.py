@@ -71,6 +71,8 @@ class CameraSharedMemProvider:
         self._worker_initialized.wait()  # wait for the shared memory block address
         self._child_shm = shared_memory.SharedMemory(name=self._shm_addr.value)
 
+        print(f"Loading shm from addr {self._child_shm.name}")
+
         _shape = pickle.loads(self._buffer_shape.value)
         _dtype = pickle.loads(self._buffer_dtype.value)
 
@@ -116,7 +118,9 @@ class CameraSharedMemProvider:
             shm_primitives["shm"].close()
             shm_primitives["shm"].unlink()
 
-            logging.debug("Provider worker process has stopped correctly")  # TODO enable logging from worker process
+            print(f"Deleted shm with addr {shm_primitives['shm'].name}")
+
+            print("Provider worker process has stopped correctly")  # TODO enable logging from worker process
 
     def _on_frame_ready(self, frame: Frame, shared_mem_primitives: Dict, delay: Optional[int] = 1) -> None:
         """
@@ -135,6 +139,8 @@ class CameraSharedMemProvider:
             shared_mem_primitives["frame_buffer_lock"].acquire()
 
             shared_mem_primitives["shm"] = shared_memory.SharedMemory(create=True, size=first_frame.nbytes)
+
+            print(f"Creating shm with addr {shared_mem_primitives['shm'].name}")
 
             shared_mem_primitives["frame_buffer"] = np.ndarray(first_frame.shape, dtype=first_frame.dtype, buffer=shared_mem_primitives["shm"].buf)
             shared_mem_primitives["frame_buffer"][:] = first_frame[:]
@@ -168,8 +174,8 @@ class CameraSharedMemProvider:
         self._frame_buffer_lock.acquire()
 
         del self._child_frame_buffer
-        #self._child_shm.close()
-        #self._child_shm.unlink()
+        self._child_shm.close()
+        # self._child_shm.unlink()
 
         self._frame_buffer_lock.release()
 

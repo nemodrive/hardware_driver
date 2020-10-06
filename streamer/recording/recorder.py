@@ -17,6 +17,8 @@ import time
 
 import faster_fifo
 
+import sys
+
 from shmq import SharedMemoryQueue
 
 
@@ -80,7 +82,7 @@ class ShmqVideoWriteBuffer:
         self.path = path
         self.resolution = resolution
 
-        self.output_queue = SharedMemoryQueue(element_shape=(resolution[0], resolution[1], 3), max_size=3, dtype=np.uint8)
+        self.output_queue = faster_fifo.Queue(1000 * 100000) #SharedMemoryQueue(element_shape=(resolution[0], resolution[1], 3), max_size=3, dtype=np.uint8)
 
         manager = Manager()
         self._is_running = manager.Event()
@@ -95,7 +97,7 @@ class ShmqVideoWriteBuffer:
 
     def _recorder(self, input_queue: SharedMemoryQueue, path: str, resolution: Tuple[int, int], is_running: Event):
 
-        input_queue.register_worker()
+        #input_queue.register_worker()
 
         self._fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         self._video_writer = cv2.VideoWriter(path, self._fourcc, 100.0, resolution)
@@ -103,11 +105,14 @@ class ShmqVideoWriteBuffer:
         print("Recording worker is ready")
 
         while is_running.is_set():
-            print("get start")
+            # print("get start")
 
             frame = input_queue.get()
 
-            print("get end")
+            if frame is None:
+                continue
+
+            # print("get end")
 
             self._video_writer.write(frame)
 
@@ -123,16 +128,25 @@ class ShmqVideoWriteBuffer:
 
         self._crt_frame += 1
 
+        sys.getsizeof(frame)
+
         self.output_queue.put(frame)
 
-        print("put end")
+        # print("put end")
 
         return self._crt_frame - 1
 
     def close(self):
         """Closes the video file and cleans all used resources."""
         self._is_running.clear()
+        #self.output_queue.send_close_signal()
+        self.output_queue.put(None)
+
         self._worker.join()
+
+        print("-------------Video writer has joined---------------")
+
+        #self.output_queue.free()
 
 
 class VideoReadBuffer:
@@ -858,7 +872,7 @@ class FastSeparateRecorder:
 
         for pos in self.enabled_positions:
             path = os.path.join(self.out_path, f"{pos}.mp4")
-            self.open_videos[pos] = VideoWriteBuffer(path, self.resolution) #ShmqVideoWriteBuffer(path, self.resolution)  # excluding them from child process
+            self.open_videos[pos] = ShmqVideoWriteBuffer(path, self.resolution) #ShmqVideoWriteBuffer(path, self.resolution)  # excluding them from child process
 
     def close(self):
         """Closes video and metadata files and cleans all used resources."""

@@ -188,3 +188,24 @@ class SharedMemStreamer:
             last_time = time.time()
 
             yield return_packet
+
+    def close(self):
+
+        # bring down video providers
+        if self.settings["enabled_features"]["video"]:
+
+            for pos, cam_id in self.camera_ids.items():
+                self.camera_providers[pos].close()
+
+        # bring down gps
+        if self.settings["enabled_features"]["gps"]:
+            self.gps_provider.close() # TODO auto find port like IMU does?
+
+        # setup IMU
+        if self.settings["enabled_features"]["imu"]:
+            # TODO
+            pass
+
+        # setup CAN SPEED
+        if self.settings["enabled_features"]["canbus"]:
+            self.canbus_provider.close()

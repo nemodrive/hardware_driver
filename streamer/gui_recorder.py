@@ -12,8 +12,8 @@ import json
 import numpy as np
 
 from streamer import SharedMemStreamer
-from recording.recorder import Recorder, ThreadedRecorder, Player, PipedRecorder, FastRecorder, FastCompressedRecorder
-from compression.compressor import JITCompressor
+from recording.recorder import Recorder, ThreadedRecorder, Player, PipedRecorder, FastRecorder, FastCompressedRecorder, FastSeparateRecorder
+from compression.compressor import JITCompressor, ImageOnlyJITCompressor
 from compression.decompressor import Decompressor
 
 
@@ -57,14 +57,14 @@ class StreamThread(QThread):
         #
         #     source_stream = Decompressor(p.stream_generator(loop=True)).uncompressed_generator()
 
-        with FastRecorder(out_path=self.rec_path) as r:
+        with FastSeparateRecorder(out_path=self.rec_path) as r:
 
             telemetry_delay = self.telemetry_delay_frames + 1
             multiple_delay_ms = []
 
             last_time = time.time()
 
-            jit_compressor = JITCompressor()
+            jit_compressor = ImageOnlyJITCompressor() #JITCompressor()
 
             debug_time = time.time()
 
@@ -136,6 +136,8 @@ class StreamThread(QThread):
 
                 print("delay_gui = ", time.time() - debug_time)
                 debug_time = time.time()
+
+        streamer.close()
 
     def stop(self):
         self._is_running = False

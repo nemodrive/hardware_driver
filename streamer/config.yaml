@@ -1,9 +1,9 @@
 enabled_features:
   video: True
   video_undistort: False
-  gps: True
-  imu: True
-  canbus: True
+  gps: False
+  imu: False
+  canbus: False
   monitoring_panel: True
 
 #camera_serial_numbers:

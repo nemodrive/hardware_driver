@@ -66,18 +66,10 @@ class StreamThread(QThread):
 
                 recv_obj = next(source_stream)
 
+                total_elapsed_this_packet = time.time()
+
                 print("delay_recv = ", time.time() - debug_time)
                 debug_time = time.time()
-
-                # simulate delay
-
-                if previous_packet_datetime is None:
-                    previous_packet_datetime = recv_obj['datetime']
-                else:
-                    required_delay = (recv_obj['datetime'] - previous_packet_datetime).total_seconds()
-                    previous_packet_datetime = recv_obj['datetime']
-
-                    time.sleep(required_delay)
 
                 # show telemetry to user
 
@@ -130,6 +122,20 @@ class StreamThread(QThread):
 
                 print("delay_gui = ", time.time() - debug_time)
                 debug_time = time.time()
+
+                # simulate delay
+
+                if previous_packet_datetime is None:
+                    previous_packet_datetime = recv_obj['datetime']
+                else:
+
+                    total_elapsed_this_packet = time.time() - total_elapsed_this_packet
+
+                    required_delay = (recv_obj['datetime'] - previous_packet_datetime).total_seconds() - total_elapsed_this_packet
+                    previous_packet_datetime = recv_obj['datetime']
+
+                    if required_delay > 0:
+                        time.sleep(required_delay)
 
     def stop(self):
         self._is_running = False

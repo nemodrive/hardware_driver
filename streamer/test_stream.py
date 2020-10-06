@@ -3,7 +3,21 @@ from streamer import SharedMemStreamer
 import logging
 import time
 
+import signal
+
+terminate = False
+
+
+def _handle_signal(signum, frame):
+    global terminate
+    terminate = True
+    print("Shutting down please wait...")
+
+
 logging.basicConfig(level=logging.DEBUG)
+
+
+signal.signal(signal.SIGINT, _handle_signal)
 
 if __name__ == '__main__':
 
@@ -19,7 +33,9 @@ if __name__ == '__main__':
 
     # cv2.startWindowThread()
 
-    for packet in stream.stream_generator():
+    while not terminate:
+
+        packet = next(stream.stream_generator())
 
         # print(packet)
 
@@ -27,7 +43,7 @@ if __name__ == '__main__':
         last_time = time.time()
 
         print(fps)
-        print(packet["speed"])
+        print(packet["images"])
 
         # print(packet["images"].keys())
 
@@ -48,3 +64,5 @@ if __name__ == '__main__':
             # cv2.destroyAllWindows()
 
         time.sleep(0.2)
+
+    stream.close()

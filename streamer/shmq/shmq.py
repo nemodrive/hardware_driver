@@ -1,5 +1,5 @@
 from multiprocessing import Process, Manager, Queue, Event, Lock, shared_memory, Value
-from typing import Tuple
+from typing import Tuple, Union
 from ctypes import c_int64, c_bool
 import time
 import numpy as np
@@ -13,9 +13,6 @@ class SharedMemoryQueue:
         self._element_shape = element_shape
         self._max_size = max_size
         self._dtype = dtype
-
-        self._read_cache_size = 60
-        self._read_cache = []
 
         # init synchronization mechanism
 
@@ -110,9 +107,15 @@ class SharedMemoryQueue:
         self._written_indices.put(found_index)
         self._buffer_locks[found_index].release()
 
-    def get(self) -> np.ndarray:
+    def send_close_signal(self):
+        self._written_indices.put(None)
+
+    def get(self) -> Union[np.ndarray, None]:
 
         crt_element_index = self._written_indices.get()
+
+        if crt_element_index is None:
+            return None
 
         # read the value
 
@@ -136,44 +139,15 @@ class SharedMemoryQueue:
 
         return return_value
 
-    def get_via_cache(self) -> np.ndarray:
-
-        if len(self._read_cache) == 0:
-            # need to refresh the cache!
-
-            todo_jobs = []
-
-            for i in range(self._read_cache_size):
-                todo_jobs.append(self._written_indices.get())
-
-            for crt_element_index in todo_jobs:
-
-                # read the value
-
-                self._buffer_locks[crt_element_index].acquire()
-
-                self._read_cache.append(np.ndarray(shape=self._element_shape, dtype=self._dtype, buffer=self._buffer_shms[crt_element_index].buf).copy())
-
-                self._buffer_locks[crt_element_index].release()
-
-            self._buffer_status_lock.acquire()
-
-            for crt_element_index in todo_jobs:
-                # announce position free
-                self._buffer_free[crt_element_index].value = True
-
-            self._crt_buffer_size.value = self._crt_buffer_size.value - len(todo_jobs)
-
-            if not self._write_available.is_set():
-                self._write_available.set()
-
-            self._buffer_status_lock.release()
-
-        # just get it from cache
-        return self._read_cache.pop(0)
-
     def free(self):
-        pass
+        self._buffer_status_lock.acquire()
+
+        for i in range(self._max_size):
+
+            self._buffer_locks[i].acquire()
+
+            self._buffer_shms[i].close()
+            self._buffer_shms[i].unlink()
 
 
 def producer(queue: SharedMemoryQueue):
