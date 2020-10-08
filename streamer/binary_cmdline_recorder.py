@@ -1,5 +1,4 @@
-from recording.recorders import FastSeparateRecorder, FastRecorder
-from compression.compressor import Compressor, JITCompressor, ImageOnlyJITCompressor
+from recording.binary_recorders import BinaryRecorder
 from streamer import Streamer
 
 import numpy as np
@@ -61,40 +60,29 @@ def generate_mock_packet():
 
 if __name__ == '__main__':
 
-    streamer = Streamer()
-    # TODO give it a warmup period?
-    source_stream = streamer.stream_generator()
+    # streamer = Streamer()
+    # # TODO give it a warmup period?
+    # source_stream = streamer.stream_generator()
 
     # with Player("./saved_datasets/recording_test") as p:
     #
     #     source_stream = Decompressor(p.stream_generator(loop=True)).uncompressed_generator()
 
-    with FastSeparateRecorder(out_path="./saved_datasets/recording_debug") as r:
-
-        jit_compressor = ImageOnlyJITCompressor() #JITCompressor()
+    with BinaryRecorder(out_path="./saved_datasets/delete_me") as r:
 
         job_start_time = time.time()
 
         while not terminate:
 
-            recv_obj = next(source_stream)  # generate_mock_packet()
+            recv_obj = generate_mock_packet() # next(source_stream)  # generate_mock_packet()
 
             # print(f"packet size = {sys.getsizeof(recv_obj)}")
 
-            frame_start_time = time.time()
-
-            compressed = jit_compressor.compress_next_packet(recv_obj)
-            # compressed = recv_obj
-
-            #print(f"Delay Compress {time.time() - frame_start_time}")
-
             rec_start_time = time.time()
 
-            r.record_packet(compressed)
+            r.record_packet(recv_obj)
 
-            #print(f"Delay record {time.time() - rec_start_time}")
-
-            delay = time.time() - frame_start_time
+            delay = time.time() - rec_start_time
 
             print(f"frametime: {delay} FPS: {1 / delay}")
 

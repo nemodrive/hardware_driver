@@ -1,4 +1,4 @@
-from recording.recorder import VideoWriteBuffer, ThreadedVideoWriteBuffer
+from recording.recorders import VideoWriteBuffer, ThreadedVideoWriteBuffer
 import numpy as np
 import time
 

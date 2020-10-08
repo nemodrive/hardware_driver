@@ -44,6 +44,9 @@ class CameraSharedMemProvider:
         self._pixel_format = manager.Value(c_char_p, "")
         self._frame_buffer_lock = Lock()
 
+        self._data_available = manager.Event()
+        self._data_available.clear()
+
         self._worker = None
         self._spawn_worker()
 
@@ -63,6 +66,7 @@ class CameraSharedMemProvider:
                               self._buffer_shape,
                               self._pixel_format,
                               self._frame_buffer_lock,
+                              self._data_available,
                               self._worker_running,
                               self._worker_initialized
                           )
@@ -81,7 +85,8 @@ class CameraSharedMemProvider:
         logging.debug(f"CameraProvider {self.camera_id} process init successful")
 
     def _blueprint(self, camera_id: str, shm_addr: Value, buffer_dtype: Value, buffer_shape: Value,
-                   pixel_format: Value, frame_buffer_lock: Lock, is_running: Event, worker_initialized: Event) -> None:
+                   pixel_format: Value, frame_buffer_lock: Lock, data_available: Event,
+                   is_running: Event, worker_initialized: Event) -> None:
 
         with Vimba() as vimba:
             camera = vimba.camera(camera_id)
@@ -96,7 +101,8 @@ class CameraSharedMemProvider:
                 "shm_addr": shm_addr,
                 "buffer_dtype": buffer_dtype,
                 "buffer_shape": buffer_shape,
-                "pixel_format": pixel_format
+                "pixel_format": pixel_format,
+                "data_available": data_available
             }
 
             _callback = functools.partial(self._on_frame_ready, shared_mem_primitives=shm_primitives)
@@ -138,7 +144,7 @@ class CameraSharedMemProvider:
 
             shared_mem_primitives["frame_buffer_lock"].acquire()
 
-            shared_mem_primitives["shm"] = shared_memory.SharedMemory(create=True, size=first_frame.nbytes)
+            shared_mem_primitives["shm"] = shared_memory.SharedMemory(create=True, size=first_frame.nbytes)  # TODO shared memory needs to be unlinked by exactly this thread, use an event!
 
             print(f"Creating shm with addr {shared_mem_primitives['shm'].name}")
 
@@ -150,6 +156,8 @@ class CameraSharedMemProvider:
             shared_mem_primitives["buffer_shape"].value = pickle.dumps(first_frame.shape)
             shared_mem_primitives["pixel_format"].value = frame.pixel_format
 
+            shared_mem_primitives["data_available"].set()
+
             shared_mem_primitives["frame_buffer_lock"].release()
 
             # notify main process that shared memory is ready to use
@@ -158,6 +166,7 @@ class CameraSharedMemProvider:
         else:
             shared_mem_primitives["frame_buffer_lock"].acquire()
             shared_mem_primitives["frame_buffer"][:] = frame.buffer_data_numpy()[:]
+            shared_mem_primitives["data_available"].set()
             shared_mem_primitives["frame_buffer_lock"].release()
 
     def close(self) -> None:
@@ -175,7 +184,7 @@ class CameraSharedMemProvider:
 
         del self._child_frame_buffer
         self._child_shm.close()
-        # self._child_shm.unlink()
+        # TODO not working self._child_shm.unlink()
 
         self._frame_buffer_lock.release()
 
@@ -204,6 +213,8 @@ class CameraSharedMemProvider:
 
         buffer_copy = deepcopy(self._child_frame_buffer)
 
+        self._data_available.clear()
+
         self._frame_buffer_lock.release()
 
         return buffer_copy
@@ -218,6 +229,9 @@ class CameraSharedMemProvider:
 
         raw_frame = self.get_last_frame_raw()
         return cv2.cvtColor(raw_frame, PIXEL_FORMATS_CONVERSIONS[self._pixel_format.value])
+
+    def has_unread_data(self):
+        return self._data_available.is_set()
 
 
 if __name__ == '__main__':

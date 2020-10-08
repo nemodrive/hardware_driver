@@ -11,8 +11,8 @@ import pyqtgraph as pg
 import json
 import numpy as np
 
-from streamer import SharedMemStreamer
-from recording.recorder import Recorder, ThreadedRecorder, Player, PipedRecorder, FastRecorder, FastCompressedRecorder, FastSeparateRecorder
+from streamer import Streamer
+from recording.recorders import Recorder, ThreadedRecorder, Player, PipedRecorder, FastRecorder, FastCompressedRecorder, FastSeparateRecorder
 from compression.compressor import JITCompressor, ImageOnlyJITCompressor
 from compression.decompressor import Decompressor
 
@@ -49,7 +49,7 @@ class StreamThread(QThread):
 
     def run(self):
 
-        streamer = SharedMemStreamer()
+        streamer = Streamer()
         # TODO give it a warmup period?
         source_stream = streamer.stream_generator()
 

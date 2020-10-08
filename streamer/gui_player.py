@@ -11,8 +11,8 @@ import pyqtgraph as pg
 import json
 import numpy as np
 
-from streamer import SharedMemStreamer
-from recording.recorder import Recorder, ThreadedRecorder, Player, PipedRecorder, FastRecorder, FastCompressedRecorder
+from streamer import Streamer
+from recording.recorders import Recorder, ThreadedRecorder, Player, PipedRecorder, FastRecorder, FastCompressedRecorder
 from compression.compressor import JITCompressor
 from compression.decompressor import Decompressor
 

@@ -1,5 +1,5 @@
 import cv2
-from streamer import SharedMemStreamer
+from streamer import Streamer
 import logging
 import time
 
@@ -21,7 +21,7 @@ signal.signal(signal.SIGINT, _handle_signal)
 
 if __name__ == '__main__':
 
-    stream = SharedMemStreamer()
+    stream = Streamer()
 
     last_time = time.time()
 

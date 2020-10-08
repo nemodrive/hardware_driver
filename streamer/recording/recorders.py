@@ -11,7 +11,7 @@ import cv2  # TODO test dual backend using scikit video?
 from player import DatasetPlayer
 from compression.compressor import Compressor, JITCompressor
 from compression.decompressor import Decompressor, JITDecompressor
-from streamer import SharedMemStreamer
+from streamer import Streamer
 
 import time
 
@@ -1058,7 +1058,7 @@ class FastCompressedRecorder:
 
 if __name__ == '__main__':
 
-    streamer = SharedMemStreamer()
+    streamer = Streamer()
     # TODO give it a warmup period?
     source_stream = streamer.stream_generator()
 

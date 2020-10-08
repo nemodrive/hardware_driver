@@ -31,6 +31,9 @@ class GPSProvider:
         self._worker_running = manager.Event()
         self._gps_cache_lock = Lock()
 
+        self._data_available = manager.Event()
+        self._data_available.clear()
+
         self._gps_port = gps_port
 
         self._worker = None
@@ -44,11 +47,13 @@ class GPSProvider:
         self._worker_running.set()
         self._worker = Process(
                           target=self._blueprint,
-                          args=(self._gps_port, self._gps_cache, self._gps_cache_lock, self._worker_running)
+                          args=(self._gps_port, self._gps_cache, self._gps_cache_lock,
+                                self._data_available, self._worker_running)
                       )
         self._worker.start()
 
-    def _blueprint(self, gps_port: str, gps_cache: NMEACache, gps_cache_lock: Lock, is_running: Event) -> None:
+    def _blueprint(self, gps_port: str, gps_cache: NMEACache, gps_cache_lock: Lock, data_available: Event,
+                   is_running: Event) -> None:
         """
         Blueprint for the GPS worker which will perpetually receive packets from the physical device.
 
@@ -56,6 +61,7 @@ class GPSProvider:
             gps_port (str): Serial port where the gps device is connected
             gps_cache (NMEACache): Cache where received packages will be stored
             gps_cache_lock (Lock): Lock for safely accessing the gps_cache
+            data_available (Event): Is set if new data was read from the device but not received by the master thread yet
             is_running (Event): The process will shut down when this event is cleared
         """
 
@@ -83,6 +89,8 @@ class GPSProvider:
                 gps_cache_lock.acquire()
 
                 gps_cache[nmea_msg.sentence_type] = nmea_msg
+
+                data_available.set()
 
                 gps_cache_lock.release()
 
@@ -131,9 +139,15 @@ class GPSProvider:
 
         cache_copy = deepcopy(self._gps_cache)
 
+        self._gps_cache.clear()
+        self._data_available.clear()
+
         self._gps_cache_lock.release()
 
         return cache_copy
+
+    def has_unread_data(self):
+        return self._data_available.is_set()
 
 
 if __name__ == '__main__':

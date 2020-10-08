@@ -22,11 +22,14 @@ class CanbusProvider:
         """
         self._can_device = can_device
 
-        manager = Manager()  # fun fact, make this self.manager and watch the world burn
+        manager = Manager()
 
         self._canbus_cache = manager.dict()
         self._worker_running = manager.Event()
         self._canbus_cache_lock = Lock()
+
+        self._data_available = manager.Event()
+        self._data_available.clear()
 
         self._can_dbc = cantools.db.load_file(dbc_file, strict=False)
 
@@ -41,17 +44,21 @@ class CanbusProvider:
         self._worker_running.set()
         self._worker = Process(
             target=self._can_communicator,
-            args=(self._can_device, self._can_dbc, self._canbus_cache, self._canbus_cache_lock, self._worker_running)
+            args=(self._can_device, self._can_dbc, self._canbus_cache, self._canbus_cache_lock,
+                  self._data_available, self._worker_running)
         )
         self._worker.start()
 
     def _can_communicator(self, can_device: str, can_dbc: Any,
                           canbus_cache: Dict[str, Any],
-                          canbus_cache_lock: Lock, is_running: Event) -> None:
+                          canbus_cache_lock: Lock,
+                          data_available: Event,
+                          is_running: Event) -> None:
         CAN_CMD_NAMES = dict({
             # cmd_name, data_name, can_id
             "speed": ("SPEED_SENSOR", "SPEED_KPS", "354"),
             "steer": ("STEERING_SENSORS", "STEER_ANGLE", "0C6"),
+            # TODO why not record everything? it's not like we don't have space...
             # TODO what is the id? "brake": ("BRAKE_SENSOR", "PRESIUNE_C_P")
         })
 
@@ -77,7 +84,7 @@ class CanbusProvider:
                             "timestamp": msg.timestamp
                         }
 
-                        print(cmd_key)
+                        data_available.set()
 
                         canbus_cache_lock.release()
 
@@ -122,9 +129,15 @@ class CanbusProvider:
 
         cache_copy = deepcopy(self._canbus_cache)
 
+        self._canbus_cache.clear()
+        self._data_available.clear()
+
         self._canbus_cache_lock.release()
 
         return cache_copy
+
+    def has_unread_data(self):
+        return self._data_available.is_set()
 
 
 if __name__ == '__main__':
@@ -132,6 +145,9 @@ if __name__ == '__main__':
 
     """
     bring up can: https://elinux.org/Bringing_CAN_interface_up
+    
+    sudo slcand -o -s6 -t hw -S 500000 /v/ttyUSBX
+    sudo ip link set up slcan0
     """
 
     with CanbusProvider(can_device='slcan0', dbc_file="../logan.dbc") as p:

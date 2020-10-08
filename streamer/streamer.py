@@ -1,5 +1,4 @@
 import yaml
-import numpy as np
 import cv2
 import pickle
 import logging
@@ -9,13 +8,11 @@ import time
 
 import libs.yei3.threespace_api as ts_api
 from providers.gps_provider import GPSProvider
-from providers.speed_provider import SpeedProvider, SpeedData
 from providers.canbus_provider import CanbusProvider
 from providers.camera_provider import CameraSharedMemProvider
 
-from copy import deepcopy
 
-class SharedMemStreamer:
+class Streamer:
 
     def __init__(self):
         # load settings from configuration file
@@ -24,7 +21,7 @@ class SharedMemStreamer:
 
         if self.settings["enabled_features"]["video"]:
             # assign cameras to their positions and check everything is working
-            self.camera_ids = self.settings["camera_ids"]  #self._get_camera_ids()
+            self.camera_ids = self.settings["camera_ids"]
 
             self.camera_providers = {}
 
@@ -44,8 +41,6 @@ class SharedMemStreamer:
         # setup GPS
         if self.settings["enabled_features"]["gps"]:
             self.gps_provider = GPSProvider(self.settings["gps_port"])  # TODO auto find port like IMU does?
-
-        # TODO gps_provider.close() when finished
 
         # setup IMU
         if self.settings["enabled_features"]["imu"]:
@@ -77,10 +72,10 @@ class SharedMemStreamer:
 
             # TODO imu_device.close() when finished
 
-        # setup CAN SPEED
+        # setup CAN BUS
         if self.settings["enabled_features"]["canbus"]:
             self.canbus_provider = CanbusProvider(can_device=self.settings["can_device"],
-                                                 dbc_file=self.settings["can_dbc_file"])
+                                                  dbc_file=self.settings["can_dbc_file"])
 
     def get_imu_device(self) -> ts_api.ComInfo:
         """Gets a reference to the YEI 3 sensor"""
@@ -99,39 +94,43 @@ class SharedMemStreamer:
 
             last_time = time.time()
 
-            # TODO check sync
             if self.settings["enabled_features"]["video"]:
 
                 for pos, p_cam in self.camera_providers.items():
 
-                    frame = p_cam.get_last_frame_as_ocv()
-
-                    if self.settings["enabled_features"]["video_undistort"]:
-
-                        h, w = frame.shape[:2]
-
-                        cameramtx, roi = cv2.getOptimalNewCameraMatrix(
-                            self.cam_calib_data[pos]['mtx'],
-                            self.cam_calib_data[pos]['dist'],
-                            (w, h),
-                            1,
-                            (w, h)
-                        )
-
-                        corrected = cv2.undistort(
-                            frame,
-                            self.cam_calib_data[pos]['mtx'],
-                            self.cam_calib_data[pos]['dist'],
-                            None,
-                            cameramtx
-                        )  # FIXME
-
-                        x, y, w, h = roi
-                        corrected = corrected[y:y + h, x:x + w]
-
-                        return_packet["images"][pos] = corrected
+                    if p_cam.has_unread_data():
+                        frame = p_cam.get_last_frame_raw()  # p_cam.get_last_frame_as_ocv()
                     else:
-                        return_packet["images"][pos] = frame
+                        frame = None
+
+                    # if self.settings["enabled_features"]["video_undistort"]:
+                    #
+                    #     # TODO will only work with RGB!!!!
+                    #
+                    #     h, w = frame.shape[:2]
+                    #
+                    #     cameramtx, roi = cv2.getOptimalNewCameraMatrix(
+                    #         self.cam_calib_data[pos]['mtx'],
+                    #         self.cam_calib_data[pos]['dist'],
+                    #         (w, h),
+                    #         1,
+                    #         (w, h)
+                    #     )
+                    #
+                    #     corrected = cv2.undistort(
+                    #         frame,
+                    #         self.cam_calib_data[pos]['mtx'],
+                    #         self.cam_calib_data[pos]['dist'],
+                    #         None,
+                    #         cameramtx
+                    #     )  # FIXME
+                    #
+                    #     x, y, w, h = roi
+                    #     corrected = corrected[y:y + h, x:x + w]
+                    #
+                    #     return_packet["images"][pos] = corrected
+                    # else:
+                    return_packet["images"][pos] = frame
 
             print("get_from_cams=", time.time() - last_time)
             last_time = time.time()
@@ -141,6 +140,8 @@ class SharedMemStreamer:
             if self.settings["enabled_features"]["imu"]:
 
                 imu_batch = self.imu_device.getStreamingBatch()
+
+                # TODO this one has no is_data_avail() implemented
 
                 print("get_from_imu=", time.time() - last_time)
                 last_time = time.time()
@@ -170,19 +171,24 @@ class SharedMemStreamer:
             last_time = time.time()
 
             if self.settings["enabled_features"]["gps"]:
-                gps_msgs = self.gps_provider.get_latest_messages()
-                return_packet["sensor_data"]["gps"] = gps_msgs
 
-                # for msg_type, msg_value in gps_msgs.items():
-                #     return_packet["sensor_data"]["gps"][msg_type] = str(msg_value)
+                if self.gps_provider.has_unread_data():
+                    gps_msgs = self.gps_provider.get_latest_messages()
+                    return_packet["sensor_data"]["gps"] = gps_msgs
+                else:
+                    return_packet["sensor_data"]["gps"] = None
 
             print("get_from_gps=", time.time() - last_time)
             last_time = time.time()
 
             if self.settings["enabled_features"]["canbus"]:
-                canbus_msgs = self.canbus_provider.get_latest_messages()
-                return_packet["sensor_data"]["canbus"] = canbus_msgs
 
+                if self.canbus_provider.has_unread_data():
+                    canbus_msgs = self.canbus_provider.get_latest_messages()
+                    return_packet["sensor_data"]["canbus"] = canbus_msgs
+                else:
+                    canbus_msgs = self.canbus_provider.get_latest_messages()
+                    return_packet["sensor_data"]["canbus"] = canbus_msgs
 
             print("get_from_can=", time.time() - last_time)
             last_time = time.time()
@@ -199,13 +205,13 @@ class SharedMemStreamer:
 
         # bring down gps
         if self.settings["enabled_features"]["gps"]:
-            self.gps_provider.close() # TODO auto find port like IMU does?
+            self.gps_provider.close()  # TODO auto find port like IMU does?
 
-        # setup IMU
+        # bring down IMU
         if self.settings["enabled_features"]["imu"]:
             # TODO
             pass
 
-        # setup CAN SPEED
+        # bring down CAN SPEED
         if self.settings["enabled_features"]["canbus"]:
             self.canbus_provider.close()

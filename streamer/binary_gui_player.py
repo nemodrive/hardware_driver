@@ -11,8 +11,7 @@ import pyqtgraph as pg
 import json
 import numpy as np
 
-from streamer import Streamer
-
+from recording.binary_recorders import BinaryPlayer
 
 class StreamThread(QThread):
 
@@ -25,9 +24,10 @@ class StreamThread(QThread):
 
     signal_imu = pyqtSignal(dict)
 
-    def __init__(self):
+    def __init__(self, rec_path):
         super(StreamThread, self).__init__()
 
+        self.rec_path = rec_path
         self._is_running = True
 
         self.telemetry_delay_frames = 10
@@ -45,79 +45,86 @@ class StreamThread(QThread):
 
     def run(self):
 
-        streamer = Streamer()
-        # TODO give it a warmup period?
-        source_stream = streamer.stream_generator()
+        with BinaryPlayer(self.rec_path) as p:
 
-        telemetry_delay = self.telemetry_delay_frames + 1
-        multiple_delay_ms = []
+            source_stream = p.stream_generator(loop=True)
 
-        last_time = time.time()
+            telemetry_delay = self.telemetry_delay_frames + 1
+            multiple_delay_ms = []
 
-        debug_time = time.time()
-
-        while self._is_running:
-
-            recv_obj = next(source_stream)
-
-            print("delay_recv = ", time.time() - debug_time)
-            debug_time = time.time()
-
-            # show telemetry to user
-
-
-            print(recv_obj["sensor_data"]["gps"])
-            print(recv_obj["sensor_data"]["canbus"])
-
-            for pos in recv_obj["images"].keys():
-                recv_obj["images"][pos] = cv2.resize(recv_obj["images"][pos],
-                                                     (int(recv_obj["images"][pos].shape[1] / 2.8),
-                                                      int(recv_obj["images"][pos].shape[0] / 2.8)))
-
-            # TODO always check key exists!!! also in streamer
-            try:
-                self.signal_change_pixmap_left.emit(self.img_ocv_to_qt(recv_obj["images"]["left"]))
-            except:
-                pass
-
-            try:
-                self.signal_change_pixmap_center.emit(self.img_ocv_to_qt(recv_obj["images"]["center"]))
-            except:
-                pass
-
-            try:
-                self.signal_change_pixmap_right.emit(self.img_ocv_to_qt(recv_obj["images"]["right"]))
-            except:
-                pass
-
-            delay = time.time() - last_time
             last_time = time.time()
 
-            multiple_delay_ms.append(delay * 1000)
-
-            try:
-                self.signal_imu.emit(recv_obj["sensor_data"]["imu"])
-            except:
-                pass
-
-            try:
-                self.signal_telemetry_text.emit(json.dumps(recv_obj["sensor_data"], indent=4))
-            except:
-                pass
-
-            if telemetry_delay > self.telemetry_delay_frames:
-
-                telemetry_delay = 0
-
-                avg_delay_ms = statistics.mean(multiple_delay_ms)
-                multiple_delay_ms.clear()
-                self.signal_fps.emit(int(1/avg_delay_ms * 1000))
-                self.signal_ms.emit(int(avg_delay_ms))
-            else:
-                telemetry_delay += 1
-
-            print("delay_gui = ", time.time() - debug_time)
             debug_time = time.time()
+
+            previous_packet_datetime = None
+
+            while self._is_running:
+
+                recv_obj = next(source_stream)
+
+                total_elapsed_this_packet = time.time()
+
+                print("delay_recv = ", time.time() - debug_time)
+                debug_time = time.time()
+
+                # show telemetry to user
+
+                for pos in recv_obj["images"].keys():
+
+                    if not recv_obj["images"][pos] is None:
+
+                        recv_obj["images"][pos] = cv2.cvtColor(recv_obj["images"][pos], cv2.COLOR_BAYER_RG2RGB)
+
+                        recv_obj["images"][pos] = cv2.resize(recv_obj["images"][pos],
+                                                             (int(recv_obj["images"][pos].shape[1] / 2.8),
+                                                              int(recv_obj["images"][pos].shape[0] / 2.8)))
+
+                if "left" in recv_obj["images"].keys() and recv_obj["images"]["left"] is not None:
+                    self.signal_change_pixmap_left.emit(self.img_ocv_to_qt(recv_obj["images"]["left"]))
+
+                if "center" in recv_obj["images"].keys() and recv_obj["images"]["center"] is not None:
+                    self.signal_change_pixmap_center.emit(self.img_ocv_to_qt(recv_obj["images"]["center"]))
+
+                if "right" in recv_obj["images"].keys() and recv_obj["images"]["right"] is not None:
+                    self.signal_change_pixmap_right.emit(self.img_ocv_to_qt(recv_obj["images"]["right"]))
+
+                delay = time.time() - last_time
+                last_time = time.time()
+
+                multiple_delay_ms.append(delay * 1000)
+
+                if "imu" in recv_obj["sensor_data"].keys() and recv_obj["sensor_data"]["imu"] is not None:
+                    self.signal_imu.emit(recv_obj["sensor_data"]["imu"])
+
+                self.signal_telemetry_text.emit(json.dumps(recv_obj["sensor_data"], indent=4))
+
+                if telemetry_delay > self.telemetry_delay_frames:
+
+                    telemetry_delay = 0
+
+                    avg_delay_ms = statistics.mean(multiple_delay_ms)
+                    multiple_delay_ms.clear()
+                    self.signal_fps.emit(int(1/avg_delay_ms * 1000))
+                    self.signal_ms.emit(int(avg_delay_ms))
+                else:
+                    telemetry_delay += 1
+
+                print("delay_gui = ", time.time() - debug_time)
+                debug_time = time.time()
+
+                # simulate delay
+
+                if previous_packet_datetime is None:
+                    previous_packet_datetime = recv_obj['datetime']
+                else:
+
+                    total_elapsed_this_packet = time.time() - total_elapsed_this_packet
+
+                    required_delay = (recv_obj['datetime'] - previous_packet_datetime).total_seconds() - total_elapsed_this_packet
+                    previous_packet_datetime = recv_obj['datetime']
+
+                    if required_delay > 0:
+                        time.sleep(required_delay)
 
     def stop(self):
         self._is_running = False
@@ -184,8 +191,8 @@ class MyWindow(QtWidgets.QMainWindow):
         self.curve_orientation_y.setData(self.imu_data_orientation_y)
         self.curve_orientation_z.setData(self.imu_data_orientation_z)
 
-    def start_stream(self):
-        self.stream_thread = StreamThread()
+    def start_stream(self, rec_path):
+        self.stream_thread = StreamThread(rec_path)
 
         self.stream_thread.signal_change_pixmap_left.connect(self.set_pixmap_left)
         self.stream_thread.signal_change_pixmap_center.connect(self.set_pixmap_center)
@@ -206,11 +213,13 @@ class MyWindow(QtWidgets.QMainWindow):
         # pg.setConfigOption('leftButtonPan', False)
 
         super(MyWindow, self).__init__()
-        uic.loadUi('gui/previewer.ui', self)
+        uic.loadUi('gui/player.ui', self)
 
         self.stream_label_left = self.findChild(QtWidgets.QLabel, 'labelStreamLeft')
         self.stream_label_center = self.findChild(QtWidgets.QLabel, 'labelStreamCenter')
         self.stream_label_right = self.findChild(QtWidgets.QLabel, 'labelStreamRight')
+
+        self.line_edit_rec_path = self.findChild(QtWidgets.QLineEdit, 'lineEditRecPath')
 
         self.button_record = self.findChild(QtWidgets.QPushButton, 'pushButtonRecord')
         self.button_record.clicked.connect(self.on_click_rec)
@@ -271,7 +280,7 @@ class MyWindow(QtWidgets.QMainWindow):
 
     @pyqtSlot()
     def on_click_rec(self):
-        self.start_stream()
+        self.start_stream(self.line_edit_rec_path.text())
         self.button_stop.setEnabled(True)
         self.button_record.setEnabled(False)
 
