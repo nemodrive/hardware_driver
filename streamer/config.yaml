@@ -1,8 +1,8 @@
 enabled_features:
   video: True
   video_undistort: False
-  gps: False
-  imu: False
+  gps: True
+  imu: True
   canbus: False
   monitoring_panel: True
 
@@ -20,8 +20,8 @@ video_resolution:
   width: 2064
   height: 1544
 
-gps_port: /dev/ttyACM2
-imu_port: /dev/ttyACM0
+gps_port: /dev/ttyACM0
+imu_port: /dev/ttyACM1
 
 can_device: slcan0
 can_dbc_file: logan.dbc

@@ -11,7 +11,9 @@ import pyqtgraph as pg
 import json
 import numpy as np
 
-from recording.binary_recorders import BinaryPlayer
+from streamer import Streamer
+from recording.binary_recorders import BinaryRecorder
+
 
 class StreamThread(QThread):
 
@@ -45,34 +47,35 @@ class StreamThread(QThread):
 
     def run(self):
 
-        with BinaryPlayer(self.rec_path) as p:
+        streamer = Streamer()
+        # TODO give it a warmup period?
+        source_stream = streamer.stream_generator()
 
-            source_stream = p.stream_generator(loop=True)
+        # with Player("./saved_datasets/recording_test") as p:
+        #
+        #     source_stream = Decompressor(p.stream_generator(loop=True)).uncompressed_generator()
+
+        with BinaryRecorder(out_path=self.rec_path) as r:
 
             telemetry_delay = self.telemetry_delay_frames + 1
             multiple_delay_ms = []
 
             last_time = time.time()
 
-            debug_time = time.time()
-
-            previous_packet_datetime = None
+            minimal_delay = 0.01
 
             while self._is_running:
 
+                frame_start_time = time.time()
+
                 recv_obj = next(source_stream)
 
-                total_elapsed_this_packet = time.time()
-
-                print("delay_recv = ", time.time() - debug_time)
-                debug_time = time.time()
+                r.record_packet(recv_obj)
 
                 # show telemetry to user
 
                 for pos in recv_obj["images"].keys():
-
                     if not recv_obj["images"][pos] is None:
-
                         recv_obj["images"][pos] = cv2.cvtColor(recv_obj["images"][pos], cv2.COLOR_BAYER_RG2RGB)
 
                         # recv_obj["images"][pos] = cv2.imdecode(recv_obj["images"][pos])
@@ -98,8 +101,6 @@ class StreamThread(QThread):
                 if "imu" in recv_obj["sensor_data"].keys() and recv_obj["sensor_data"]["imu"] is not None:
                     self.signal_imu.emit(recv_obj["sensor_data"]["imu"])
 
-                # self.signal_telemetry_text.emit(json.dumps(recv_obj["sensor_data"], indent=4, default=lambda o: '<not serializable>'))
-
                 self.signal_telemetry_text.emit(str(recv_obj["sensor_data"]))
 
                 if telemetry_delay > self.telemetry_delay_frames:
@@ -113,22 +114,19 @@ class StreamThread(QThread):
                 else:
                     telemetry_delay += 1
 
-                print("delay_gui = ", time.time() - debug_time)
-                debug_time = time.time()
+                delay = time.time() - frame_start_time
 
-                # simulate delay
+                print(f"delay {delay} min delay {minimal_delay}")
 
-                if previous_packet_datetime is None:
-                    previous_packet_datetime = recv_obj['datetime']
-                else:
+                if delay < minimal_delay:
+                    # TODO limit FPS
+                    time.sleep(minimal_delay - delay)
+                    print(f"sleeping for: {minimal_delay - delay}")
 
-                    total_elapsed_this_packet = time.time() - total_elapsed_this_packet
+                total_frametime_after_delay = time.time() - frame_start_time
+                print(f"frametime: {total_frametime_after_delay} FPS: {1 / total_frametime_after_delay}")
 
-                    required_delay = (recv_obj['datetime'] - previous_packet_datetime).total_seconds() - total_elapsed_this_packet
-                    previous_packet_datetime = recv_obj['datetime']
-
-                    if required_delay > 0:
-                        time.sleep(required_delay)
+        streamer.close()
 
     def stop(self):
         self._is_running = False
@@ -217,7 +215,7 @@ class MyWindow(QtWidgets.QMainWindow):
         # pg.setConfigOption('leftButtonPan', False)
 
         super(MyWindow, self).__init__()
-        uic.loadUi('gui/player.ui', self)
+        uic.loadUi('gui/record.ui', self)
 
         self.stream_label_left = self.findChild(QtWidgets.QLabel, 'labelStreamLeft')
         self.stream_label_center = self.findChild(QtWidgets.QLabel, 'labelStreamCenter')

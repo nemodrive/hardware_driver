@@ -108,10 +108,7 @@ class GPSProvider:
 
         # clear cache just to be sure
         self._gps_cache_lock.acquire()
-
-        for m in self._gps_cache.keys():
-            self._gps_cache[m] = None
-
+        self._gps_cache.clear()
         self._gps_cache_lock.release()
 
         logging.debug("GPS Provider has cleaned up used resources")
@@ -154,16 +151,15 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.DEBUG)
 
-    with GPSProvider('COM7') as p:
-        for i in range(10):
-            crt_cache = p.get_latest_messages()
+    with GPSProvider('/dev/ttyACM0') as p:
+        for i in range(1000):
 
-            # print("\tLatest GGA message: ", repr(crt_cache["GGA"]))
-            # print("\tLatest GSA message: ", repr(crt_cache["GSA"]))
+            if p.has_unread_data():
+                print(p.get_latest_messages())
+            else:
+                print(None)
 
-            print(crt_cache)
-
-            time.sleep(2)
+            # time.sleep(2)
 
     print("Graceful exit?")
     print(not p._worker.is_alive())

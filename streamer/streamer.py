@@ -99,7 +99,14 @@ class Streamer:
                 for pos, p_cam in self.camera_providers.items():
 
                     if p_cam.has_unread_data():
-                        frame = p_cam.get_last_frame_raw()  # p_cam.get_last_frame_as_ocv()
+                        frame = p_cam.get_last_frame_raw()  # p_cam.get_last_frame_as_ocv() # TODO check sizes
+                        # frame = p_cam.get_last_frame_as_ocv()
+                        # frame = cv2.resize(frame, (frame.shape[1] // 2, frame.shape[0] // 2))
+                        #
+                        # frame = cv2.cvtColor(frame, cv2.COLOR_BAYER_R)
+
+                        # frame = cv2.imencode(".jpg", frame)
+
                     else:
                         frame = None
 

@@ -60,31 +60,42 @@ def generate_mock_packet():
 
 if __name__ == '__main__':
 
-    # streamer = Streamer()
-    # # TODO give it a warmup period?
-    # source_stream = streamer.stream_generator()
+    streamer = Streamer()
+    # TODO give it a warmup period?
+    source_stream = streamer.stream_generator()
 
     # with Player("./saved_datasets/recording_test") as p:
     #
     #     source_stream = Decompressor(p.stream_generator(loop=True)).uncompressed_generator()
 
-    with BinaryRecorder(out_path="./saved_datasets/delete_me") as r:
+    # with BinaryRecorder(out_path="./saved_datasets/delete_me_2") as r:
+    with BinaryRecorder(out_path="/media/amiro/KingstonNVME/simple", compress_gzip=False) as r:
 
         job_start_time = time.time()
 
+        minimal_delay = 0.01
+
         while not terminate:
 
-            recv_obj = generate_mock_packet() # next(source_stream)  # generate_mock_packet()
+            frame_start_time = time.time()
+
+            recv_obj = next(source_stream) # generate_mock_packet()
 
             # print(f"packet size = {sys.getsizeof(recv_obj)}")
 
-            rec_start_time = time.time()
-
             r.record_packet(recv_obj)
 
-            delay = time.time() - rec_start_time
+            delay = time.time() - frame_start_time
 
-            print(f"frametime: {delay} FPS: {1 / delay}")
+            print(f"delay { delay} min delay {minimal_delay}")
+
+            if delay < minimal_delay:
+                # TODO limit FPS
+                time.sleep(minimal_delay - delay)
+                print(f"sleeping for: {minimal_delay - delay}")
+
+            total_frametime_after_delay = time.time() - frame_start_time
+            print(f"frametime: {total_frametime_after_delay} FPS: {1 / total_frametime_after_delay}")
 
     # print(f"Recording finished in {time.time() - job_start_time}")
 

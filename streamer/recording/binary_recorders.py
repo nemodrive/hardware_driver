@@ -1,5 +1,6 @@
 from typing import Optional, Iterator
 import os
+import gzip
 
 import pickle
 import yaml
@@ -12,7 +13,7 @@ class BinaryRecorder:
     No compression!!!
     """
 
-    def __init__(self, out_path: Optional[str] = "./test_recording/"):
+    def __init__(self, out_path: Optional[str] = "./test_recording/", compress_gzip=False):
         """
         Instantiates the Recorder with the details of the dataset that will be recorded.
         To be ready for recording start() needs to be called.
@@ -23,6 +24,8 @@ class BinaryRecorder:
         """
 
         self.out_path = out_path
+
+        self.compress_gzip = compress_gzip
 
         self.file_path = os.path.join(self.out_path, "recording.pkl")
 
@@ -40,7 +43,11 @@ class BinaryRecorder:
         Opens the video files and makes sure the Recorder is ready to receive data packets.
         Is called automatically by __enter__() if the Recorder is called within a Python "with" statement.
         """
-        self.file_handle = open(self.file_path, "wb")
+
+        if self.compress_gzip:
+            self.file_handle = gzip.open(self.file_path, "wb")
+        else:
+            self.file_handle = open(self.file_path, "wb")
 
     def close(self):
         """Closes video and metadata files and cleans all used resources."""
@@ -69,7 +76,7 @@ class BinaryRecorder:
 class BinaryPlayer:
     """Plays back a dataset recorded using a Recorder object"""
 
-    def __init__(self, in_path: Optional[str] = "./test_recording/"):
+    def __init__(self, in_path: Optional[str] = "./test_recording/", decompress_gzip=False):
         """
         Instantiates the Player with the details of the dataset that will be played back.
         To be ready for playback start() needs to be called.
@@ -80,7 +87,7 @@ class BinaryPlayer:
         """
 
         self.in_path = in_path
-
+        self.decompress_gzip = decompress_gzip
         self.file_path = os.path.join(self.in_path, "recording.pkl")
 
         # load settings from configuration file
@@ -94,7 +101,10 @@ class BinaryPlayer:
         Opens the video files and makes sure the Player is ready to stream data.
         Is called automatically by __enter__() if the Player is called within a Python "with" statement.
         """
-        self.file_handle = open(self.file_path, "rb")
+        if self.decompress_gzip:
+            self.file_handle = gzip.open(self.file_path, "rb")
+        else:
+            self.file_handle = open(self.file_path, "rb")
 
     def close(self):
         """Closes video and metadata files and cleans all used resources."""
