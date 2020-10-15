@@ -151,8 +151,8 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.DEBUG)
 
-    with GPSProvider('/dev/ttyACM0') as p:
-        for i in range(1000):
+    with GPSProvider('/dev/ttyACM1') as p:
+        for i in range(10000):
 
             if p.has_unread_data():
                 print(p.get_latest_messages())

@@ -627,11 +627,14 @@ class Player:
 
             for pos, img_num in packet_small["images"].items():
 
-                if not img_num == self.open_videos[pos].get_crt_frame_number():
-                    print("ERROR Frame index differs from video index!!!!")
+                if img_num is None:
+                    packet_big["images"][pos] = None
+                else:
+                    if not img_num == self.open_videos[pos].get_crt_frame_number():
+                        print("ERROR Frame index differs from video index!!!!")
 
-                img = self.open_videos[pos].read_frame()
-                packet_big["images"][pos] = img
+                    img = self.open_videos[pos].read_frame()
+                    packet_big["images"][pos] = img
 
             return packet_big
         else:
@@ -914,20 +917,23 @@ class FastSeparateRecorder:
             saved_images = {}
 
             for pos, img in images.items():
-                frame_index = self.open_videos[pos].write_frame(img)
-                saved_images[pos] = frame_index
+                if img is not None:
+                    frame_index = self.open_videos[pos].write_frame(img)
+                    saved_images[pos] = frame_index
+                else:
+                    saved_images[pos] = None
 
             packet["images"] = saved_images
 
         # print(packet["images"])
 
-        print(f"vwrite delay {time.time() - last_time}")
-        last_time = time.time()
+        # print(f"vwrite delay {time.time() - last_time}")
+        # last_time = time.time()
 
         self.packets_queue.put(packet)
 
-        print(f"q put delay {time.time() - last_time}")
-        last_time = time.time()
+        # print(f"q put delay {time.time() - last_time}")
+        # last_time = time.time()
 
 
 class FastCompressedRecorder:

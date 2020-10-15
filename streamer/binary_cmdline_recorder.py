@@ -69,11 +69,11 @@ if __name__ == '__main__':
     #     source_stream = Decompressor(p.stream_generator(loop=True)).uncompressed_generator()
 
     # with BinaryRecorder(out_path="./saved_datasets/delete_me_2") as r:
-    with BinaryRecorder(out_path="/media/amiro/KingstonNVME/simple", compress_gzip=False) as r:
+    with BinaryRecorder(out_path="/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/test_energetica_v3", compress_gzip=False) as r:
 
         job_start_time = time.time()
 
-        minimal_delay = 0.01
+        minimal_delay = 0.01  # 0.025?
 
         while not terminate:
 
