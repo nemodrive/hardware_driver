@@ -1,6 +1,7 @@
 import signal
 import yaml
 
+
 from network.threaded_client import ThreadedBroadcastClient
 
 client_running = True
