@@ -89,9 +89,9 @@ class ThreadedBroadcastClient:
 
                 output_queue.put((packet, delay_ms, packet_size))
 
-            except ConnectionResetError:
-                print("Server closed connection")
-                is_running.clear()
+            # except ConnectionResetError:
+            #     print("Server closed connection")
+            #     is_running.clear()
             except pickle.UnpicklingError as e:
                 print(e)
                 print("Malformed data received")

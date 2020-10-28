@@ -11,7 +11,7 @@ import cv2  # TODO test dual backend using scikit video?
 from player import DatasetPlayer
 from compression.compressor import Compressor, JITCompressor
 from compression.decompressor import Decompressor, JITDecompressor
-from streamer import Streamer
+# from streamer import Streamer
 
 import time
 
@@ -1064,9 +1064,9 @@ class Player:
 
 if __name__ == '__main__':
 
-    streamer = Streamer()
+    # streamer = Streamer()
     # TODO give it a warmup period?
-    source_stream = streamer.stream_generator()
+    # source_stream = streamer.stream_generator()
 
     # with Player("./saved_datasets/recording_test") as p:
     #
@@ -1085,4 +1085,6 @@ if __name__ == '__main__':
     #
     #         r.record_packet(compressed)
 
-    streamer.close()
+    # streamer.close()
+
+    pass

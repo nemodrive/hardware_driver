@@ -33,7 +33,7 @@ def main():
     # streamer.stream_generator(time_delayed=True, simulator_delay=None)
 
     with Player("./saved_datasets/_c_test_automatica_1") as p:
-        source_stream = p.stream_generator(loop=True)
+        source_stream = p.stream_generator(loop=False)   # TODO: set to false to run only once
 
         # read config for network streaming
         with open("config.yaml", "r") as f:

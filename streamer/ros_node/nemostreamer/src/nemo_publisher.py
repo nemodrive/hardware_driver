@@ -16,8 +16,9 @@ import logging
 
 from threaded_client import ThreadedBroadcastClient
 
-host = '192.168.183.1' # '192.168.100.128'  # '192.168.183.130'
+host = '0.0.0.0' # '192.168.100.128'  # '192.168.183.130'
 port = 6366
+HEADER_SIZE = 10
 HEADER_SIZE = 10
 BUFFER_SIZE = 104857600
 
