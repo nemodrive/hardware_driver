@@ -44,6 +44,9 @@ BO_ 852 SPEED_SENSOR: 8 IO
 BO_ 144 BRAKE_SENSOR: 4 IO
  SG_ PRESIUNE_C_P : 0|8@1+ (1.0,0) [-500|500] "deg" NEO
 
+BO_ 1502 TURN_SIGNAL: 8 IO
+ SG_ LIGHT_STATUS : 4|8@1+ (1.0,0) [-500|500] "" NEO
+
 CM_ BU_ DRIVER "The driver controller driving the car";
 CM_ BU_ MOTOR "The motor controller of the car";
 CM_ BU_ SENSOR "The sensor controller of the car";

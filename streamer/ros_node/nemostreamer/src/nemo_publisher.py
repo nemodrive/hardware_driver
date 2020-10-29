@@ -16,7 +16,7 @@ import logging
 
 from threaded_client import ThreadedBroadcastClient
 
-host = '192.168.183.1' # '192.168.100.128'  # '192.168.183.130'
+host = '127.0.0.1' # '192.168.100.128'  # '192.168.183.130'
 port = 6366
 HEADER_SIZE = 10
 BUFFER_SIZE = 104857600
@@ -35,7 +35,6 @@ def publisher():
     imu_publisher = rospy.Publisher('nemo_imu', Imu, queue_size=settings["queue_size"])
     nmea_publisher = rospy.Publisher('nemo_nmea_sentence', Sentence, queue_size=settings["queue_size"])
     speed_publisher = rospy.Publisher('nemo_odom', Odometry, queue_size=settings["queue_size"])
-
 
     with ThreadedBroadcastClient(host, port, HEADER_SIZE, BUFFER_SIZE) as client:
 
@@ -98,11 +97,15 @@ def publisher():
 
                     # NOTE: it may be necessary to convert other message types to GGA type
                     # (as this is required by navsat_transform)
-                    if msg_type == "GGA":
-                        #rospy.loginfo(msg_data["msg"])
-                        gps_header = Header(frame_id="gps", stamp=rospy.Time.from_sec(time.mktime(packet["datetime"].timetuple())))
-                        nmea_msg = Sentence(header=gps_header, sentence=str(msg_data))
-                        nmea_publisher.publish(nmea_msg)
+                    # if msg_type == "GGA":
+                        # rospy.loginfo(msg_data)
+                    gps_header = Header(frame_id="gps", stamp=rospy.Time.from_sec(time.mktime(packet["datetime"].timetuple())))
+
+                    print(str(msg_data))
+                    print('\r' in str(msg_data))
+
+                    nmea_msg = Sentence(header=gps_header, sentence=str(msg_data))
+                    nmea_publisher.publish(nmea_msg)
 
             # send speed data to nemo_odometry topic
 

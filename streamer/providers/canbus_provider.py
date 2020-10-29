@@ -58,8 +58,8 @@ class CanbusProvider:
             # cmd_name, data_name, can_id
             "speed": ("SPEED_SENSOR", "SPEED_KPS", "354"),
             "steer": ("STEERING_SENSORS", "STEER_ANGLE", "0C6"),
-            # TODO why not record everything? it's not like we don't have space...
-            # TODO what is the id? "brake": ("BRAKE_SENSOR", "PRESIUNE_C_P")
+            "signal": ("TURN_SIGNAL", "LIGHT_STATUS", "5DE"),
+            "brake": ("BRAKE_SENSOR", "PRESIUNE_C_P", "90"),
         })
 
         with can.interface.Bus(can_device, bustype='socketcan') as can_bus:
@@ -146,17 +146,19 @@ if __name__ == '__main__':
     """
     bring up can: https://elinux.org/Bringing_CAN_interface_up
     
-    sudo slcand -o -s6 -t hw -S 500000 /v/ttyUSBX
+    sudo slcand -o -s6 -t hw -S 500000 ttyUSBX
     sudo ip link set up slcan0
     """
 
     with CanbusProvider(can_device='slcan0', dbc_file="../logan.dbc") as p:
-        for i in range(10):
+        for i in range(1000000):
             crt_cache = p.get_latest_messages()
 
-            print(crt_cache)
+            if "brake" in crt_cache:
+                print(crt_cache["brake"])
 
-            time.sleep(2)
+
+            # time.sleep(2)
 
     print("Graceful exit?")
     print(not p._worker.is_alive())

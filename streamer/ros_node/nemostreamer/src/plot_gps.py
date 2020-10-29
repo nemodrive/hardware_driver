@@ -8,7 +8,7 @@ import argparse
 
 # topic_name = 'gps/filtered'
 # topic_name = 'test/odom_from_gps'
-bag_name ='/home/student/.ros/nemo_fusion.bag'
+# bag_name ='~/.ros/nemo_fusion.bag'
 
 def callback(data):
     rospy.loginfo(rospy.get_caller_id() + "I heard %s", data.data)
@@ -59,7 +59,7 @@ def plot_bag(bag_name, real_gps_topic, filtered_gps_topic):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-b', '--bag', dest='bag_file', type=str, default="/home/student/.ros/nemo_fusion.bag",
+    parser.add_argument('-b', '--bag', dest='bag_file', type=str, default="/home/amiro/.ros/nemo_fusion.bag",
                         help="ROS bag topic containing the filtered gps positions")
     parser.add_argument('-r', '--real', dest='real_gps_topic', type=str, default='/fix',
                         help="ROS bag topic containing the ground truth gps positions")

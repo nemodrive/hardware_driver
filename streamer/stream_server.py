@@ -32,7 +32,7 @@ def main():
 
     # streamer.stream_generator(time_delayed=True, simulator_delay=None)
 
-    with Player("./saved_datasets/_c_test_automatica_1") as p:
+    with Player("/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/compressed/_c_test_automatica_1") as p:
         source_stream = p.stream_generator(loop=True)
 
         # read config for network streaming

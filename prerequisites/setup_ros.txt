@@ -13,13 +13,15 @@ source ~/.bashrc
 
 git clone https://github.com/nemodrive/hardware_driver.git -b ros_node
 
---------------------------------------------------------------------------------
+
+sudo apt-get install ros-kinetic-nmea-navsat-driver
+sudo apt-get install ros-kinetic-robot-localization
+
+(python2) pip install pynmea2
+(python2) pip install matplotlib
+(python2) pip install --upgrade pip
 
 roslaunch ./nemo_fusion.launch
-sudo apt-get install ros-kinetic-nmea-navsat-driver
-
-
-
 
 --------------------------------------------------------------------------------
 
