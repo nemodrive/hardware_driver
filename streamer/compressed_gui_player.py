@@ -28,11 +28,16 @@ class StreamThread(QThread):
     signal_steer = pyqtSignal(int)
 
     signal_imu = pyqtSignal(dict)
+    signal_gps_pos = pyqtSignal(dict)
 
     signal_progress = pyqtSignal(int)
 
     signal_crt_time = pyqtSignal(str)
     signal_end_time = pyqtSignal(str)
+
+    signal_gps_num_sat = pyqtSignal(int)
+    signal_gps_hdop = pyqtSignal(int)
+    signal_gps_alt = pyqtSignal(int)
 
     can_play = Event()
     can_play.set()
@@ -144,6 +149,19 @@ class StreamThread(QThread):
                     # print(recv_obj["sensor_data"]["canbus"]["signal"]["value"])
                     self.signal_turn.emit(int(recv_obj["sensor_data"]["canbus"]["signal"]["value"]))
 
+            if "gps" in recv_obj["sensor_data"].keys() and recv_obj["sensor_data"]["gps"] is not None:
+                if "GGA" in recv_obj["sensor_data"]["gps"]:
+
+                    crt_gga = recv_obj["sensor_data"]["gps"]["GGA"]
+
+                    self.signal_gps_hdop.emit(int(float(crt_gga.horizontal_dil) * 100))
+                    self.signal_gps_num_sat.emit(int(crt_gga.num_sats))
+                    self.signal_gps_alt.emit(int(crt_gga.altitude))
+
+                    # todo plot lat lon
+
+                    self.signal_gps_pos.emit({"LAT": crt_gga.latitude, "LON": crt_gga.longitude})
+
             if "datetime" in recv_obj.keys():
                 self.signal_crt_time.emit(self.strfdelta(recv_obj["datetime"] - start_datetime,
                                                          "{H:02d}:{M:02d}:{S:02d}"))
@@ -197,13 +215,7 @@ class StreamThread(QThread):
 
     def goto(self, percent):
         if not self.can_play.is_set():
-
             target_frame = int(percent * len(self.player) / 100)
-
-            print(percent)
-            print(target_frame)
-            print(len(self.player))
-
             self.player.crt_frame_index = target_frame
 
 
@@ -271,6 +283,18 @@ class MyWindow(QtWidgets.QMainWindow):
     def set_end_time(self, time_str):
         self.line_edit_end_time.setText(time_str)
 
+    @pyqtSlot(int)
+    def set_gps_num_sat(self, num_sat):
+        self.lcd_gps_num_sat.display(num_sat)
+
+    @pyqtSlot(int)
+    def set_gps_hdop(self, hdop):
+        self.lcd_gps_hdop.display(hdop)
+
+    @pyqtSlot(int)
+    def set_gps_alt(self, alt):
+        self.lcd_gps_alt.display(alt)
+
     @pyqtSlot(dict)
     def update_imu_plot(self, imu_data):
         # print(imu_data)
@@ -303,6 +327,22 @@ class MyWindow(QtWidgets.QMainWindow):
         self.curve_orientation_y.setData(self.imu_data_orientation_y)
         self.curve_orientation_z.setData(self.imu_data_orientation_z)
 
+    @pyqtSlot(dict)
+    def update_gps_plot(self, coords):
+
+        if self.gps_data_lat is None and self.gps_data_lon is None:
+            self.gps_data_lat = np.array([coords["LAT"]])
+            self.gps_data_lon = np.array([coords["LON"]])
+
+            self.scatter_gps_pos = self.plot_item_gps.plot(self.gps_data_lon, self.gps_data_lat, pen=None, symbol='o')
+
+        else:
+
+            self.gps_data_lat = np.concatenate((self.gps_data_lat, [coords["LAT"]]))
+            self.gps_data_lon = np.concatenate((self.gps_data_lon, [coords["LON"]]))
+
+            self.scatter_gps_pos.setData(self.gps_data_lon, self.gps_data_lat)
+
     def start_stream(self, rec_path):
         self.stream_thread = StreamThread(rec_path)
 
@@ -320,10 +360,16 @@ class MyWindow(QtWidgets.QMainWindow):
 
         self.stream_thread.signal_imu.connect(self.update_imu_plot)
 
+        self.stream_thread.signal_gps_pos.connect(self.update_gps_plot)
+
         self.stream_thread.signal_progress.connect(self.set_progress)
 
         self.stream_thread.signal_crt_time.connect(self.set_crt_time)
         self.stream_thread.signal_end_time.connect(self.set_end_time)
+
+        self.stream_thread.signal_gps_num_sat.connect(self.set_gps_num_sat)
+        self.stream_thread.signal_gps_hdop.connect(self.set_gps_hdop)
+        self.stream_thread.signal_gps_alt.connect(self.set_gps_alt)
 
         self.stream_thread.start()
 
@@ -378,6 +424,10 @@ class MyWindow(QtWidgets.QMainWindow):
         self.lcd_speed = self.findChild(QtWidgets.QLCDNumber, 'lcdSpeed')
         self.lcd_brake = self.findChild(QtWidgets.QLCDNumber, 'lcdBrake')
         self.lcd_steer = self.findChild(QtWidgets.QLCDNumber, 'lcdSteer')
+
+        self.lcd_gps_num_sat = self.findChild(QtWidgets.QLCDNumber, 'lcdGPSSattelites')
+        self.lcd_gps_hdop = self.findChild(QtWidgets.QLCDNumber, 'lcdGPSHDOP')
+        self.lcd_gps_alt = self.findChild(QtWidgets.QLCDNumber, 'lcdGPSAltitude')
 
         self.pixmap_turn_left_active = QPixmap("./gui/arrow_left_filled.svg")  # todo make paths absolute
         self.pixmap_turn_left_default = QPixmap("./gui/arrow_left_blank.svg")  # todo make paths absolute
@@ -437,6 +487,15 @@ class MyWindow(QtWidgets.QMainWindow):
         self.curve_orientation_y = self.plot_item_orientation.plot(self.imu_data_orientation_y, pen='g', name="y")
         self.curve_orientation_z = self.plot_item_orientation.plot(self.imu_data_orientation_z, pen='b', name="z")
 
+        self.plot_widget_gps = self.findChild(pg.PlotWidget, 'plotWidgetGPS')
+        self.plot_widget_gps.setTitle("GPS RAW")
+        self.plot_item_gps = self.plot_widget_gps.getPlotItem()
+
+        self.gps_data_lat = None
+        self.gps_data_lon = None
+
+        self.scatter_gps_pos = None
+
         self.show()
 
     @pyqtSlot()
@@ -465,6 +524,9 @@ class MyWindow(QtWidgets.QMainWindow):
 
         self.is_video_paused = False
 
+        self.gps_data_lat = None
+        self.gps_data_lon = None
+
     @pyqtSlot()
     def on_click_next_frame(self):
         self.stream_thread.frame_advance()
@@ -483,11 +545,12 @@ class MyWindow(QtWidgets.QMainWindow):
     @pyqtSlot()
     def on_slider_value_changed(self):
         if self.is_video_paused:
-            print(f"seeking to {self.slider_seek.value()}!")
+            # print(f"seeking to {self.slider_seek.value()}!")
             self.stream_thread.goto(self.slider_seek.value())
 
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     window = MyWindow()
+    # window.setStyleSheet("background-color: #474747;")
     sys.exit(app.exec_())
