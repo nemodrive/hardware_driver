@@ -555,7 +555,7 @@ class PipedRecorder:
 class Player:
     """Plays back a dataset recorded using a Recorder object"""
 
-    def __init__(self, in_path: Optional[str] = "./test_recording/"):
+    def __init__(self, in_path: Optional[str] = "./test_recording/", compute_indices: Optional[bool] = True):
         """
         Instantiates the Player with the details of the dataset that will be played back.
         To be ready for playback start() needs to be called.
@@ -577,6 +577,12 @@ class Player:
         self.open_videos = {}
         self.metadata_file = None
 
+        self.uses_indices = compute_indices
+        self._crt_frame_index = 0
+        self.indices = []
+        self.start_datetime = None
+        self.end_datetime = None
+
     def start(self):
         """
         Opens the video files and makes sure the Player is ready to stream data.
@@ -589,6 +595,29 @@ class Player:
 
         for pos in self.enabled_positions:
             self.open_videos[pos] = VideoReadBuffer(os.path.join(self.in_path, video_paths[pos]))
+
+        if self.uses_indices:
+            print("Computing indices...")
+
+            while True:
+                self.indices.append(self.metadata_file.tell())
+                try:
+                    crt_frame = pickle.load(self.metadata_file)
+                except (EOFError, pickle.UnpicklingError):
+                    self.indices.pop()
+                    break
+
+            self.metadata_file.seek(self.indices[-1], 0)
+            last_frame = pickle.load(self.metadata_file)
+            self.end_datetime = last_frame["datetime"]
+
+            self.metadata_file.seek(self.indices[0], 0)
+            first_frame = pickle.load(self.metadata_file)
+            self.start_datetime = first_frame["datetime"]
+
+            self.metadata_file.seek(self.indices[0], 0)
+
+            print(f"Indices built for {len(self.indices)} frames!")
 
     def close(self):
         """Closes video and metadata files and cleans all used resources."""
@@ -606,6 +635,36 @@ class Player:
         """This allows the Player to be (optionally) used in Python 'with' statements"""
         self.close()
 
+    def __len__(self):
+        if self.uses_indices:
+            return len(self.indices)
+        else:
+            raise Exception("Cannot use len() on player that has no frame indices")
+
+    @property
+    def crt_frame_index(self):
+        return self._crt_frame_index
+
+    @crt_frame_index.setter
+    def crt_frame_index(self, value):
+
+        if self.uses_indices:
+
+            if not 0 <= value < len(self.indices):
+                raise Exception(f"Out of range seek to frame index {value} in a {len(self.indices)} frame video")
+
+            self._crt_frame_index = value
+
+            self.metadata_file.seek(self.indices[value], 0)
+
+            # TODO these will cause a little lag on video restart as they are set automatically to the correct values
+            # TODO could maybe explore a few frames in this region and set the correct frame indices from here
+            # for pos in self.enabled_positions:
+            #     self.open_videos[pos].set_frame(value)
+
+        else:
+            raise Exception("Cannot use len() on player that has no frame indices")
+
     def get_next_packet(self) -> dict:
         """
         Return the next packet in the recording.
@@ -617,6 +676,7 @@ class Player:
 
         try:
             packet_small = pickle.load(self.metadata_file)
+            self._crt_frame_index += 1
         except (EOFError, pickle.UnpicklingError):
             return None
 
@@ -631,7 +691,8 @@ class Player:
                     packet_big["images"][pos] = None
                 else:
                     if not img_num == self.open_videos[pos].get_crt_frame_number():
-                        print("ERROR Frame index differs from video index!!!!")
+                        print("Frame index differs from video index! Attempting automatic resync!")
+                        self.open_videos[pos].set_frame(img_num)
 
                     img = self.open_videos[pos].read_frame()
                     packet_big["images"][pos] = img
@@ -642,6 +703,8 @@ class Player:
 
     def rewind(self):
         """Rewinds the dataset, the next packet returned by the stream will be the first packet in the dataset"""
+
+        self._crt_frame_index = 0
 
         self.metadata_file.seek(0, 0)
 

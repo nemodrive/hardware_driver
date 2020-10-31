@@ -1,0 +1,7 @@
+<RCC>
+  <qresource prefix="signal">
+    <file>arrow_right_blank.svg</file>
+    <file>arrow_left_blank.svg</file>
+    <file>arrow.svg</file>
+  </qresource>
+</RCC>
