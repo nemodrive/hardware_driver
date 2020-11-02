@@ -61,7 +61,7 @@
       <item>
        <widget class="QLineEdit" name="lineEditRecPath">
         <property name="text">
-         <string>./saved_datasets/route1_2_2_automatica/</string>
+         <string>./saved_datasets/route_/</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>
@@ -378,7 +378,7 @@ background-color: rgb(170, 0, 0);</string>
         <item>
          <widget class="QLabel" name="label_6">
           <property name="text">
-           <string>Brake</string>
+           <string>Brake Pressure (bar)</string>
           </property>
           <property name="alignment">
            <set>Qt::AlignCenter</set>

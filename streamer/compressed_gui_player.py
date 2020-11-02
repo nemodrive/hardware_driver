@@ -15,6 +15,9 @@ from threading import Event
 from recording.recorders import Player
 
 
+GPS_PLOT_ENABLED = False
+
+
 class StreamThread(QThread):
 
     signal_change_pixmap_left = pyqtSignal(QImage)
@@ -160,7 +163,8 @@ class StreamThread(QThread):
 
                     # todo plot lat lon
 
-                    self.signal_gps_pos.emit({"LAT": crt_gga.latitude, "LON": crt_gga.longitude})
+                    if GPS_PLOT_ENABLED:
+                        self.signal_gps_pos.emit({"LAT": crt_gga.latitude, "LON": crt_gga.longitude})
 
             if "datetime" in recv_obj.keys():
                 self.signal_crt_time.emit(self.strfdelta(recv_obj["datetime"] - start_datetime,
@@ -489,6 +493,7 @@ class MyWindow(QtWidgets.QMainWindow):
 
         self.plot_widget_gps = self.findChild(pg.PlotWidget, 'plotWidgetGPS')
         self.plot_widget_gps.setTitle("GPS RAW")
+        self.plot_widget_gps.setHidden(not GPS_PLOT_ENABLED)
         self.plot_item_gps = self.plot_widget_gps.getPlotItem()
 
         self.gps_data_lat = None
