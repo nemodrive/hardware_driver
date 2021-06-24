@@ -9,14 +9,16 @@ import cv2
 if __name__ == '__main__':
 
 	tasks = [
-		("/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/test_energetica_v2",
-		 "/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/compressed/_c_test_energetica_v2"),
-		("/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/test_energetica_v3",
-		 "/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/compressed/_c_test_energetica_v3"),
-		("/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/test_rectorat1",
-		 "/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/compressed/_c_test_rectorat1"),
-		("/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/test_rectorat3_reverse",
-		 "/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/compressed/_c_test_rectorat3_reverse"),
+		# ("/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/test_energetica_v2",
+		#  "/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/compressed/_c_test_energetica_v2"),
+		# ("/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/test_energetica_v3",
+		#  "/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/compressed/_c_test_energetica_v3"),
+		# ("/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/test_rectorat1",
+		#  "/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/compressed/_c_test_rectorat1"),
+		# ("/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/test_rectorat3_reverse",
+		#  "/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/compressed/_c_test_rectorat3_reverse"),
+		("/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/prime_test_speed",
+		  "/media/amiro/9f188395-f35d-4882-b13b-6ad92af9f312/nemodrive/_c_prime_test_speed"),
 	]
 
 	for raw_in_path, compressed_out_path in tasks:

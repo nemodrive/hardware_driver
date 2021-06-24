@@ -3,8 +3,9 @@ import cv2
 import pickle
 import logging
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 import time
+import os
 
 import libs.yei3.threespace_api as ts_api
 from providers.gps_provider import GPSProvider
@@ -14,10 +15,16 @@ from providers.camera_provider import CameraSharedMemProvider
 
 class Streamer:
 
-    def __init__(self):
-        # load settings from configuration file
-        with open("config.yaml", "r") as f:
-            self.settings = yaml.load(f, Loader=yaml.SafeLoader)
+    def __init__(self, use_raw_images: Optional[bool] = True, override_settings: Optional[Dict] = None):
+
+        self.use_raw_images = use_raw_images
+
+        if override_settings != None:
+            self.settings = override_settings
+        else:
+            # load settings from configuration file
+            with open(os.path.abspath(os.path.join(os.path.dirname(__file__), "config.yaml")), "r") as f:
+                self.settings = yaml.load(f, Loader=yaml.SafeLoader)
 
         if self.settings["enabled_features"]["video"]:
             # assign cameras to their positions and check everything is working
@@ -99,14 +106,10 @@ class Streamer:
                 for pos, p_cam in self.camera_providers.items():
 
                     if p_cam.has_unread_data():
-                        frame = p_cam.get_last_frame_raw()  # p_cam.get_last_frame_as_ocv() # TODO check sizes
-                        # frame = p_cam.get_last_frame_as_ocv()
-                        # frame = cv2.resize(frame, (frame.shape[1] // 2, frame.shape[0] // 2))
-                        #
-                        # frame = cv2.cvtColor(frame, cv2.COLOR_BAYER_R)
-
-                        # frame = cv2.imencode(".jpg", frame)
-
+                        if self.use_raw_images:
+                            frame = p_cam.get_last_frame_raw()
+                        else:
+                            frame = p_cam.get_last_frame_as_ocv()
                     else:
                         frame = None
 
